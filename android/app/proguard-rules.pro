@@ -1,0 +1,2 @@
+-keep class dagger.hilt.** { *; }
+-keep class com.nick.telegramalarm.data.remote.** { *; }

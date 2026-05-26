@@ -1,0 +1,10 @@
+services:
+  telegram-alarm-backend:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./sessions:/app/sessions
+    restart: unless-stopped
