@@ -13,8 +13,6 @@ import com.nick.telegramalarm.data.model.TelegramPerson
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.network.AlarmWebSocketClient
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -43,8 +41,6 @@ class MainViewModel @Inject constructor(
     webSocketClient: AlarmWebSocketClient
 ) : ViewModel() {
     private val draft = MutableStateFlow(SettingsDraft())
-    private var backendUrlSaveJob: Job? = null
-    private var authTokenSaveJob: Job? = null
 
     val uiState: StateFlow<MainUiState> = combine(
         settingsRepository.settings,
@@ -91,24 +87,20 @@ class MainViewModel @Inject constructor(
 
     fun setBackendUrl(value: String) {
         draft.update { it.copy(backendUrl = value) }
-        backendUrlSaveJob?.cancel()
-        backendUrlSaveJob = viewModelScope.launch {
-            delay(TEXT_SAVE_DELAY_MS)
-            settingsRepository.updateBackendUrl(value)
-        }
     }
 
     fun setAuthToken(value: String) {
         draft.update { it.copy(authToken = value) }
-        authTokenSaveJob?.cancel()
-        authTokenSaveJob = viewModelScope.launch {
-            delay(TEXT_SAVE_DELAY_MS)
-            settingsRepository.updateAuthToken(value)
-        }
     }
 
     fun resetBackendUrl() {
         setBackendUrl(DEFAULT_BACKEND_URL)
+    }
+
+    fun applyConnectionSettings() = viewModelScope.launch {
+        val state = uiState.value
+        settingsRepository.updateBackendUrl(state.settings.backendUrl)
+        settingsRepository.updateAuthToken(state.settings.authToken)
     }
 
     fun setQuietHoursStart(value: String) = update { settingsRepository.updateQuietHoursStart(value) }
@@ -190,7 +182,6 @@ class MainViewModel @Inject constructor(
             .toSet()
 
     companion object {
-        private const val TEXT_SAVE_DELAY_MS = 600L
         private const val DEFAULT_BACKEND_URL = "ws://10.0.2.2:8000/ws"
     }
 }
