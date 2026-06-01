@@ -13,12 +13,13 @@ The backend uses MTProto user login only. It does not use Telegram Bot API.
 
 People filters are applied on the Android client. The backend still sends every allowed private non-bot Telegram event to connected clients, and each device decides locally whether to play an alarm.
 
-In Android settings:
+Use the `People` tab to load the latest Telegram private contacts from the backend and add/remove them without manually knowing Telegram IDs.
 
-- `Allowed sender IDs`: comma-separated Telegram sender IDs. Empty means all private users are allowed.
-- `Blocked sender IDs`: comma-separated Telegram sender IDs. Blocklist always wins.
+Rules:
 
-The `People` tab can load the latest Telegram private contacts from the backend and add/remove them without manually knowing Telegram IDs.
+- empty allowlist means all private users are allowed
+- blocklist always wins
+- if allowlist has entries, only those senders can trigger alarms
 
 Filtered events are stored in alarm history with `people_filter` status.
 

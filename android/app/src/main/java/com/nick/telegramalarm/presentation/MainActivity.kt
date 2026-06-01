@@ -354,20 +354,6 @@ private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
             singleLine = true
         )
         OutlinedTextField(
-            value = uiState.settings.allowedSenderIds,
-            onValueChange = { viewModel.setAllowedSenderIds(it) },
-            label = { Text("Allowed sender IDs") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        OutlinedTextField(
-            value = uiState.settings.blockedSenderIds,
-            onValueChange = { viewModel.setBlockedSenderIds(it) },
-            label = { Text("Blocked sender IDs") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        OutlinedTextField(
             value = uiState.settings.backendUrl,
             onValueChange = { viewModel.setBackendUrl(it) },
             label = { Text("Backend WebSocket URL") },
