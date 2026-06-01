@@ -49,6 +49,7 @@ class TelegramListenerService:
         self._messages_sent = 0
         self._messages_filtered = 0
         self._recent_people: dict[str, RecentPerson] = {}
+        self._me_id: int | None = None
 
     async def start(self) -> None:
         self._stop_event.clear()
@@ -73,6 +74,8 @@ class TelegramListenerService:
                     raise RuntimeError(
                         "Telegram session is not authorized. Run `python -m app.telegram_login` locally first."
                     )
+                me = await self._client.get_me()
+                self._me_id = int(me.id) if me else None
                 self._connected = True
                 self._last_connected_at = int(time.time())
                 self._last_error = None
@@ -94,33 +97,62 @@ class TelegramListenerService:
 
     async def _handle_new_message(self, event: events.NewMessage.Event) -> None:
         message = event.message
-        if message.out or not event.is_private:
-            self._mark_filtered("not_incoming_private")
+        if message.out:
+            self._mark_filtered("outgoing")
             return
         if message.date and int(message.date.timestamp()) < self._started_at:
             self._mark_filtered("old_message")
             return
+
         sender = await event.get_sender()
-        if not isinstance(sender, User) or sender.bot:
-            self._mark_filtered("bot_or_non_user")
+        if not isinstance(sender, User):
+            self._mark_filtered("non_user_sender")
             return
+
+        reason = await self._classify_message(event, sender)
+        if reason is None:
+            self._mark_filtered("unsupported_message_source")
+            return
+
         self._messages_seen += 1
         sender_name = " ".join(part for part in [sender.first_name, sender.last_name] if part).strip()
         if not sender_name:
             sender_name = sender.username or str(sender.id)
         text = message.message or ""
+        chat = await event.get_chat()
         payload = NewMessageEvent(
             chat_id=str(event.chat_id),
             sender_id=str(sender.id),
             sender_name=sender_name,
             message=text,
             timestamp=int(message.date.timestamp()) if message.date else int(time.time()),
+            chat_title=getattr(chat, "title", None),
+            reason=reason,
         )
         self._messages_sent += 1
         self._last_message_at = payload.timestamp
         self._remember_person(sender, sender_name, payload.timestamp)
-        log.info("telegram_new_private_message", chat_id=payload.chat_id, sender_id=payload.sender_id)
+        log.info(
+            "telegram_new_message",
+            chat_id=payload.chat_id,
+            sender_id=payload.sender_id,
+            reason=payload.reason,
+        )
         await self._on_event(payload)
+
+    async def _classify_message(self, event: events.NewMessage.Event, sender: User) -> str | None:
+        message = event.message
+        if event.is_private:
+            return "private_bot" if sender.bot else "private_user"
+        if not event.is_group:
+            return None
+        if message.is_reply and self._me_id is not None:
+            reply = await message.get_reply_message()
+            if reply and reply.sender_id == self._me_id:
+                return "group_reply"
+        if getattr(message, "mentioned", False):
+            return "group_mention"
+        return None
 
     def _mark_filtered(self, reason: str) -> None:
         self._messages_filtered += 1
@@ -144,7 +176,7 @@ class TelegramListenerService:
             try:
                 async for dialog in self._client.iter_dialogs(limit=max(limit * 3, 50)):
                     entity = dialog.entity
-                    if not isinstance(entity, User) or entity.bot:
+                    if not isinstance(entity, User):
                         continue
                     name = " ".join(part for part in [entity.first_name, entity.last_name] if part).strip()
                     if not name:

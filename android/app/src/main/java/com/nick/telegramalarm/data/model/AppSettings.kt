@@ -2,6 +2,10 @@ package com.nick.telegramalarm.data.model
 
 data class AppSettings(
     val alertsEnabled: Boolean = true,
+    val alertPrivateUsers: Boolean = true,
+    val alertPrivateBots: Boolean = false,
+    val alertGroupMentions: Boolean = false,
+    val alertGroupReplies: Boolean = false,
     val volume: Float = 1f,
     val useDefaultAlarmSound: Boolean = true,
     val autoReconnect: Boolean = true,

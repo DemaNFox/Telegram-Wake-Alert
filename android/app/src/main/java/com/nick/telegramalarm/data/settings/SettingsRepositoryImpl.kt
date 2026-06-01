@@ -24,6 +24,10 @@ class SettingsRepositoryImpl @Inject constructor(
 ) : SettingsRepository {
     private object Keys {
         val alertsEnabled = booleanPreferencesKey("alerts_enabled")
+        val alertPrivateUsers = booleanPreferencesKey("alert_private_users")
+        val alertPrivateBots = booleanPreferencesKey("alert_private_bots")
+        val alertGroupMentions = booleanPreferencesKey("alert_group_mentions")
+        val alertGroupReplies = booleanPreferencesKey("alert_group_replies")
         val volume = floatPreferencesKey("volume")
         val useDefaultAlarmSound = booleanPreferencesKey("use_default_alarm_sound")
         val autoReconnect = booleanPreferencesKey("auto_reconnect")
@@ -55,6 +59,10 @@ class SettingsRepositoryImpl @Inject constructor(
     override val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             alertsEnabled = prefs[Keys.alertsEnabled] ?: true,
+            alertPrivateUsers = prefs[Keys.alertPrivateUsers] ?: true,
+            alertPrivateBots = prefs[Keys.alertPrivateBots] ?: false,
+            alertGroupMentions = prefs[Keys.alertGroupMentions] ?: false,
+            alertGroupReplies = prefs[Keys.alertGroupReplies] ?: false,
             volume = prefs[Keys.volume] ?: 1f,
             useDefaultAlarmSound = prefs[Keys.useDefaultAlarmSound] ?: true,
             autoReconnect = prefs[Keys.autoReconnect] ?: true,
@@ -73,6 +81,10 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateAlertsEnabled(enabled: Boolean) = update(Keys.alertsEnabled, enabled)
+    override suspend fun updateAlertPrivateUsers(enabled: Boolean) = update(Keys.alertPrivateUsers, enabled)
+    override suspend fun updateAlertPrivateBots(enabled: Boolean) = update(Keys.alertPrivateBots, enabled)
+    override suspend fun updateAlertGroupMentions(enabled: Boolean) = update(Keys.alertGroupMentions, enabled)
+    override suspend fun updateAlertGroupReplies(enabled: Boolean) = update(Keys.alertGroupReplies, enabled)
     override suspend fun updateVolume(volume: Float) = update(Keys.volume, volume.coerceIn(0f, 1f))
     override suspend fun updateUseDefaultAlarmSound(enabled: Boolean) = update(Keys.useDefaultAlarmSound, enabled)
     override suspend fun updateAutoReconnect(enabled: Boolean) = update(Keys.autoReconnect, enabled)

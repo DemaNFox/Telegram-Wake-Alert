@@ -30,7 +30,7 @@ class NotificationFactory @Inject constructor(
 
     fun alarm(event: AlarmEvent) = NotificationCompat.Builder(context, NotificationChannels.ALARM)
         .setSmallIcon(R.mipmap.ic_launcher)
-        .setContentTitle(event.senderName)
+        .setContentTitle(event.notificationTitle())
         .setContentText(event.message)
         .setStyle(NotificationCompat.BigTextStyle().bigText(event.message))
         .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -69,4 +69,7 @@ class NotificationFactory @Inject constructor(
         val intent = Intent(context, AlarmForegroundService::class.java).setAction(action)
         return PendingIntent.getService(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
+
+    private fun AlarmEvent.notificationTitle(): String =
+        chatTitle?.takeIf { it.isNotBlank() }?.let { "$senderName - $it" } ?: senderName
 }

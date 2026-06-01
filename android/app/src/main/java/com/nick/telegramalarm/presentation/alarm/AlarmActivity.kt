@@ -43,11 +43,13 @@ class AlarmActivity : ComponentActivity() {
         showOverLockScreen()
         val senderName = intent.getStringExtra(EXTRA_SENDER_NAME).orEmpty()
         val message = intent.getStringExtra(EXTRA_MESSAGE).orEmpty()
+        val chatTitle = intent.getStringExtra(EXTRA_CHAT_TITLE).orEmpty()
         setContent {
             TelegramAlarmTheme {
                 AlarmScreen(
                     senderName = senderName,
                     message = message,
+                    chatTitle = chatTitle,
                     onStop = {
                         AlarmForegroundService.action(this, ServiceActions.STOP_ALARM)
                         finish()
@@ -100,10 +102,12 @@ class AlarmActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_SENDER_NAME = "sender_name"
         private const val EXTRA_MESSAGE = "message"
+        private const val EXTRA_CHAT_TITLE = "chat_title"
 
         fun intent(context: Context, event: AlarmEvent): Intent = Intent(context, AlarmActivity::class.java).apply {
             putExtra(EXTRA_SENDER_NAME, event.senderName)
             putExtra(EXTRA_MESSAGE, event.message)
+            putExtra(EXTRA_CHAT_TITLE, event.chatTitle.orEmpty())
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
     }
@@ -113,6 +117,7 @@ class AlarmActivity : ComponentActivity() {
 private fun AlarmScreen(
     senderName: String,
     message: String,
+    chatTitle: String,
     onStop: () -> Unit,
     onMute: () -> Unit,
     onSnoozeFive: () -> Unit,
@@ -142,6 +147,10 @@ private fun AlarmScreen(
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
+            if (chatTitle.isNotBlank()) {
+                Text("Chat", style = MaterialTheme.typography.labelLarge, color = Color(0xFF93C5FD))
+                Text(chatTitle, style = MaterialTheme.typography.titleMedium, color = Color(0xFFE5E7EB))
+            }
         }
         Spacer(Modifier.height(14.dp))
         Column(

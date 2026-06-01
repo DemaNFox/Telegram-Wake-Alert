@@ -87,7 +87,9 @@ class AlarmForegroundService : Service() {
             webSocketClient.events.collect { event ->
                 val settings = settingsRepository.settings.first()
                 if (settings.alertsEnabled) {
-                    if (!isSenderAllowed(event, settings)) {
+                    if (!isEventSourceEnabled(event, settings)) {
+                        alarmHistoryRepository.record(event, "source_filter")
+                    } else if (!isSenderAllowed(event, settings)) {
                         alarmHistoryRepository.record(event, "people_filter")
                     } else if (isQuietNow(settings)) {
                         alarmHistoryRepository.record(event, "quiet_hours")
@@ -190,6 +192,15 @@ class AlarmForegroundService : Service() {
         val allowed = parseSenderIds(settings.allowedSenderIds)
         return allowed.isEmpty() || senderId in allowed
     }
+
+    private fun isEventSourceEnabled(event: AlarmEvent, settings: AppSettings): Boolean =
+        when (event.reason) {
+            "private_user" -> settings.alertPrivateUsers
+            "private_bot" -> settings.alertPrivateBots
+            "group_mention" -> settings.alertGroupMentions
+            "group_reply" -> settings.alertGroupReplies
+            else -> false
+        }
 
     private fun parseSenderIds(value: String): Set<String> =
         value.split(",", "\n", " ")

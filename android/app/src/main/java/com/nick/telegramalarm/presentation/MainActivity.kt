@@ -320,6 +320,11 @@ private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         SwitchRow("Enable alerts", uiState.settings.alertsEnabled) { viewModel.setAlertsEnabled(it) }
+        Text("Alert sources", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        SwitchRow("Private users", uiState.settings.alertPrivateUsers) { viewModel.setAlertPrivateUsers(it) }
+        SwitchRow("Private bots", uiState.settings.alertPrivateBots) { viewModel.setAlertPrivateBots(it) }
+        SwitchRow("Group mentions", uiState.settings.alertGroupMentions) { viewModel.setAlertGroupMentions(it) }
+        SwitchRow("Group replies", uiState.settings.alertGroupReplies) { viewModel.setAlertGroupReplies(it) }
         SwitchRow("Auto reconnect", uiState.settings.autoReconnect) { viewModel.setAutoReconnect(it) }
         SwitchRow("Use default alarm sound", uiState.settings.useDefaultAlarmSound) { viewModel.setUseDefaultAlarmSound(it) }
         SwitchRow("Gradual volume ramp", uiState.settings.volumeRampEnabled) { viewModel.setVolumeRampEnabled(it) }

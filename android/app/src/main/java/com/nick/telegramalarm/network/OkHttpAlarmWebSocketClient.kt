@@ -75,7 +75,9 @@ class OkHttpAlarmWebSocketClient @Inject constructor(
                         senderId = json.optString("sender_id"),
                         senderName = json.optString("sender_name"),
                         message = json.optString("message"),
-                        timestamp = json.optLong("timestamp")
+                        timestamp = json.optLong("timestamp"),
+                        chatTitle = json.optNullableString("chat_title"),
+                        reason = json.optString("reason", "private_user")
                     )
                     _diagnostics.value = _diagnostics.value.copy(lastEventAt = nowSeconds())
                     _events.tryEmit(event)
@@ -125,4 +127,11 @@ class OkHttpAlarmWebSocketClient @Inject constructor(
         URLEncoder.encode(this, StandardCharsets.UTF_8.name())
 
     private fun nowSeconds(): Long = System.currentTimeMillis() / 1000
+
+    private fun JSONObject.optNullableString(name: String): String? =
+        if (isNull(name)) {
+            null
+        } else {
+            optString(name).takeIf { it.isNotBlank() && it != "null" }
+        }
 }

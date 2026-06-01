@@ -78,6 +78,10 @@ class MainViewModel @Inject constructor(
     }
 
     fun setAlertsEnabled(value: Boolean) = update { settingsRepository.updateAlertsEnabled(value) }
+    fun setAlertPrivateUsers(value: Boolean) = update { settingsRepository.updateAlertPrivateUsers(value) }
+    fun setAlertPrivateBots(value: Boolean) = update { settingsRepository.updateAlertPrivateBots(value) }
+    fun setAlertGroupMentions(value: Boolean) = update { settingsRepository.updateAlertGroupMentions(value) }
+    fun setAlertGroupReplies(value: Boolean) = update { settingsRepository.updateAlertGroupReplies(value) }
     fun setVolume(value: Float) = update { settingsRepository.updateVolume(value) }
     fun setUseDefaultAlarmSound(value: Boolean) = update { settingsRepository.updateUseDefaultAlarmSound(value) }
     fun setAutoReconnect(value: Boolean) = update { settingsRepository.updateAutoReconnect(value) }

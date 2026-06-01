@@ -6,6 +6,10 @@ import kotlinx.coroutines.flow.Flow
 interface SettingsRepository {
     val settings: Flow<AppSettings>
     suspend fun updateAlertsEnabled(enabled: Boolean)
+    suspend fun updateAlertPrivateUsers(enabled: Boolean)
+    suspend fun updateAlertPrivateBots(enabled: Boolean)
+    suspend fun updateAlertGroupMentions(enabled: Boolean)
+    suspend fun updateAlertGroupReplies(enabled: Boolean)
     suspend fun updateVolume(volume: Float)
     suspend fun updateUseDefaultAlarmSound(enabled: Boolean)
     suspend fun updateAutoReconnect(enabled: Boolean)
