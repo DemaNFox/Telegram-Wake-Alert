@@ -360,6 +360,9 @@ private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
+        Button(onClick = { viewModel.resetBackendUrl() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Reset backend URL")
+        }
         OutlinedTextField(
             value = uiState.settings.authToken,
             onValueChange = { viewModel.setAuthToken(it) },

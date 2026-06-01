@@ -58,7 +58,7 @@ class SettingsRepositoryImpl @Inject constructor(
             volume = prefs[Keys.volume] ?: 1f,
             useDefaultAlarmSound = prefs[Keys.useDefaultAlarmSound] ?: true,
             autoReconnect = prefs[Keys.autoReconnect] ?: true,
-            backendUrl = prefs[Keys.backendUrl] ?: "ws://10.0.2.2:8000/ws",
+            backendUrl = sanitizeBackendUrl(prefs[Keys.backendUrl]),
             authToken = securePrefs.getString(KEY_AUTH_TOKEN, "").orEmpty(),
             serviceEnabled = prefs[Keys.serviceEnabled] ?: true,
             quietHoursEnabled = prefs[Keys.quietHoursEnabled] ?: false,
@@ -76,7 +76,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateVolume(volume: Float) = update(Keys.volume, volume.coerceIn(0f, 1f))
     override suspend fun updateUseDefaultAlarmSound(enabled: Boolean) = update(Keys.useDefaultAlarmSound, enabled)
     override suspend fun updateAutoReconnect(enabled: Boolean) = update(Keys.autoReconnect, enabled)
-    override suspend fun updateBackendUrl(url: String) = update(Keys.backendUrl, url.trim())
+    override suspend fun updateBackendUrl(url: String) = update(Keys.backendUrl, sanitizeBackendUrl(url))
     override suspend fun updateAuthToken(token: String) {
         securePrefs.edit().putString(KEY_AUTH_TOKEN, token.trim()).apply()
         context.dataStore.edit { it[Keys.serviceEnabled] = it[Keys.serviceEnabled] ?: true }
@@ -101,7 +101,16 @@ class SettingsRepositoryImpl @Inject constructor(
             .filter { it.isNotBlank() }
             .joinToString(",")
 
+    private fun sanitizeBackendUrl(value: String?): String {
+        val trimmed = value?.trim().orEmpty()
+        if (trimmed.isBlank()) return DEFAULT_BACKEND_URL
+        if (!trimmed.startsWith("ws://") && !trimmed.startsWith("wss://")) return DEFAULT_BACKEND_URL
+        val withoutQuery = trimmed.substringBefore("?").removeSuffix("/")
+        return if (withoutQuery.endsWith("/ws")) withoutQuery else "$withoutQuery/ws"
+    }
+
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val DEFAULT_BACKEND_URL = "ws://10.0.2.2:8000/ws"
     }
 }

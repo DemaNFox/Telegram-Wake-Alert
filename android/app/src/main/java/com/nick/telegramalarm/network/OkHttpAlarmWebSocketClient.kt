@@ -41,7 +41,12 @@ class OkHttpAlarmWebSocketClient @Inject constructor(
             }
         _status.value = ConnectionStatus.CONNECTING
         updateDiagnostics(ConnectionStatus.CONNECTING)
-        socket = okHttpClient.newWebSocket(Request.Builder().url(url).build(), listener)
+        runCatching {
+            socket = okHttpClient.newWebSocket(Request.Builder().url(url).build(), listener)
+        }.onFailure {
+            _status.value = ConnectionStatus.FAILED
+            updateDiagnostics(ConnectionStatus.FAILED, failureReason = it.message ?: it.javaClass.simpleName)
+        }
     }
 
     override fun disconnect() {
@@ -109,6 +114,7 @@ class OkHttpAlarmWebSocketClient @Inject constructor(
     private fun buildWebSocketUrl(baseUrl: String, token: String, clientId: String): String? {
         val trimmed = baseUrl.trim()
         if (!trimmed.startsWith("ws://") && !trimmed.startsWith("wss://")) return null
+        if (trimmed.length <= "ws://".length || trimmed.contains(" ")) return null
         val separator = if (trimmed.contains("?")) "&" else "?"
         return trimmed +
             separator +

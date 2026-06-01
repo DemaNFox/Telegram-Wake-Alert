@@ -107,6 +107,10 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun resetBackendUrl() {
+        setBackendUrl(DEFAULT_BACKEND_URL)
+    }
+
     fun setQuietHoursStart(value: String) = update { settingsRepository.updateQuietHoursStart(value) }
     fun setQuietHoursEnd(value: String) = update { settingsRepository.updateQuietHoursEnd(value) }
     fun setCustomAlarmSoundUri(value: String) = update { settingsRepository.updateCustomAlarmSoundUri(value) }
@@ -187,5 +191,6 @@ class MainViewModel @Inject constructor(
 
     companion object {
         private const val TEXT_SAVE_DELAY_MS = 600L
+        private const val DEFAULT_BACKEND_URL = "ws://10.0.2.2:8000/ws"
     }
 }
