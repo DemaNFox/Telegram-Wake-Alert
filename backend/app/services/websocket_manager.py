@@ -1,5 +1,6 @@
 import asyncio
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 
 import structlog
 from fastapi import WebSocket
@@ -12,6 +13,7 @@ log = structlog.get_logger(__name__)
 class ClientConnection:
     websocket: WebSocket
     client_id: str
+    connected_at: int = field(default_factory=lambda: int(time.time()))
 
 
 class WebSocketManager:
@@ -21,6 +23,9 @@ class WebSocketManager:
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
+        self._last_heartbeat_at: int | None = None
+        self._last_client_message_at: int | None = None
+        self._broadcast_count = 0
 
     async def start(self) -> None:
         self._stopping.clear()
@@ -60,6 +65,7 @@ class WebSocketManager:
         for client in clients:
             try:
                 await client.websocket.send_json(payload)
+                self._broadcast_count += 1
             except Exception as exc:
                 log.warning("websocket_send_failed", client_id=client.client_id, error=str(exc))
                 failed.append(client.client_id)
@@ -74,6 +80,7 @@ class WebSocketManager:
         try:
             while not self._stopping.is_set():
                 data = await client.websocket.receive_json()
+                self._last_client_message_at = int(time.time())
                 if data.get("type") == "ping":
                     await client.websocket.send_json({"type": "pong"})
         except Exception as exc:
@@ -84,7 +91,22 @@ class WebSocketManager:
     async def _heartbeat_loop(self) -> None:
         while not self._stopping.is_set():
             await asyncio.sleep(self._heartbeat_interval_seconds)
+            self._last_heartbeat_at = int(time.time())
             await self.broadcast({"type": "heartbeat"})
+
+    async def stats(self) -> dict[str, object]:
+        async with self._lock:
+            clients = [
+                {"client_id": client.client_id, "connected_at": client.connected_at}
+                for client in self._clients.values()
+            ]
+        return {
+            "clients_count": len(clients),
+            "clients": clients,
+            "last_heartbeat_at": self._last_heartbeat_at,
+            "last_client_message_at": self._last_client_message_at,
+            "broadcast_count": self._broadcast_count,
+        }
 
     @staticmethod
     async def _close_client(client: ClientConnection) -> None:
