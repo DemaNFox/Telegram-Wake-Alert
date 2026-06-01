@@ -9,6 +9,7 @@ import com.nick.telegramalarm.data.model.AppSettings
 import com.nick.telegramalarm.data.model.BackendStatus
 import com.nick.telegramalarm.data.model.ConnectionDiagnostics
 import com.nick.telegramalarm.data.model.ConnectionStatus
+import com.nick.telegramalarm.data.model.TelegramPerson
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.network.AlarmWebSocketClient
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +30,7 @@ data class MainUiState(
     val diagnostics: ConnectionDiagnostics = ConnectionDiagnostics(),
     val backendStatus: BackendStatus? = null,
     val history: List<AlarmHistoryItem> = emptyList(),
+    val recentPeople: List<TelegramPerson> = emptyList(),
     val backendTestResult: String? = null
 )
 
@@ -59,6 +61,7 @@ class MainViewModel @Inject constructor(
             diagnostics = diagnostics,
             backendStatus = draft.backendStatus,
             history = history,
+            recentPeople = draft.recentPeople,
             backendTestResult = draft.backendTestResult
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
@@ -123,6 +126,16 @@ class MainViewModel @Inject constructor(
         alarmHistoryRepository.clear()
     }
 
+    fun refreshRecentPeople() = viewModelScope.launch {
+        val settings = uiState.value.settings
+        draft.update { it.copy(recentPeople = backendRepository.fetchRecentPeople(settings.backendUrl, settings.authToken)) }
+    }
+
+    fun allowPerson(senderId: String) = updatePeopleList(senderId, addToAllowed = true)
+    fun blockPerson(senderId: String) = updatePeopleList(senderId, addToBlocked = true)
+    fun removeAllowedPerson(senderId: String) = updatePeopleList(senderId, removeFromAllowed = true)
+    fun removeBlockedPerson(senderId: String) = updatePeopleList(senderId, removeFromBlocked = true)
+
     private fun update(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
     }
@@ -131,8 +144,41 @@ class MainViewModel @Inject constructor(
         val backendUrl: String? = null,
         val authToken: String? = null,
         val backendStatus: BackendStatus? = null,
+        val recentPeople: List<TelegramPerson> = emptyList(),
         val backendTestResult: String? = null
     )
+
+    private fun updatePeopleList(
+        senderId: String,
+        addToAllowed: Boolean = false,
+        addToBlocked: Boolean = false,
+        removeFromAllowed: Boolean = false,
+        removeFromBlocked: Boolean = false
+    ) {
+        viewModelScope.launch {
+            val settings = uiState.value.settings
+            val allowed = parseSenderIds(settings.allowedSenderIds).toMutableSet()
+            val blocked = parseSenderIds(settings.blockedSenderIds).toMutableSet()
+            if (addToAllowed) {
+                allowed.add(senderId)
+                blocked.remove(senderId)
+            }
+            if (addToBlocked) {
+                blocked.add(senderId)
+                allowed.remove(senderId)
+            }
+            if (removeFromAllowed) allowed.remove(senderId)
+            if (removeFromBlocked) blocked.remove(senderId)
+            settingsRepository.updateAllowedSenderIds(allowed.joinToString(","))
+            settingsRepository.updateBlockedSenderIds(blocked.joinToString(","))
+        }
+    }
+
+    private fun parseSenderIds(value: String): Set<String> =
+        value.split(",", "\n", " ")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
 
     companion object {
         private const val TEXT_SAVE_DELAY_MS = 600L

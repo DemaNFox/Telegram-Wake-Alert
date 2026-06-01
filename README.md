@@ -18,6 +18,8 @@ In Android settings:
 - `Allowed sender IDs`: comma-separated Telegram sender IDs. Empty means all private users are allowed.
 - `Blocked sender IDs`: comma-separated Telegram sender IDs. Blocklist always wins.
 
+The `People` tab can load the latest Telegram private contacts from the backend and add/remove them without manually knowing Telegram IDs.
+
 Filtered events are stored in alarm history with `people_filter` status.
 
 ## Backend Diagnostics
@@ -27,9 +29,10 @@ Authenticated endpoints use the same `WS_AUTH_TOKEN`:
 ```text
 GET  /status?token=<token>
 POST /test-event?token=<token>
+GET  /people/recent?token=<token>&limit=50
 ```
 
-`/status` returns Telegram listener state, WebSocket client count, last heartbeat, and message counters. `/test-event` sends a synthetic alarm event to connected Android clients.
+`/status` returns Telegram listener state, WebSocket client count, last heartbeat, and message counters. `/test-event` sends a synthetic alarm event to connected Android clients. `/people/recent` returns recent private Telegram users with sender ID, name, username, and last message timestamp so Android can manage local filters.
 
 ## Backend Setup
 

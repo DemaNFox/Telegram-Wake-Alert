@@ -1,6 +1,7 @@
 package com.nick.telegramalarm.data.backend
 
 import com.nick.telegramalarm.data.model.BackendStatus
+import com.nick.telegramalarm.data.model.TelegramPerson
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -38,6 +39,29 @@ class BackendRepositoryImpl @Inject constructor(
                 .execute()
                 .use { it.isSuccessful }
         }.getOrDefault(false)
+    }
+
+    override suspend fun fetchRecentPeople(backendUrl: String, token: String): List<TelegramPerson> {
+        val url = httpBase(backendUrl) + "/people/recent?token=${token.urlEncode()}&limit=50"
+        return runCatching {
+            okHttpClient.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+                if (!response.isSuccessful) return emptyList()
+                val array = JSONObject(response.body?.string().orEmpty()).optJSONArray("people") ?: return emptyList()
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.optJSONObject(index) ?: continue
+                        add(
+                            TelegramPerson(
+                                senderId = item.optString("sender_id"),
+                                name = item.optString("name"),
+                                username = item.optString("username").takeIf { it.isNotBlank() && it != "null" },
+                                lastMessageAt = item.optLong("last_message_at").takeIf { it > 0 }
+                            )
+                        )
+                    }
+                }
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun httpBase(backendUrl: String): String {

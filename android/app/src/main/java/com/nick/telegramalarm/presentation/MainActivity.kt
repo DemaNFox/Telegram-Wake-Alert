@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -131,13 +132,15 @@ private fun MainApp(
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Main") }, icon = { Icon(Icons.Default.NotificationsActive, null) })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Diag") }, icon = { Icon(Icons.Default.CloudSync, null) })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("History") }, icon = { Icon(Icons.Default.History, null) })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("People") }, icon = { Icon(Icons.Default.People, null) })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("History") }, icon = { Icon(Icons.Default.History, null) })
+                Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
             }
             when (tab) {
                 0 -> MainScreen(uiState, notificationsEnabled, batteryUnrestricted, onTestAlarm, onBatteryOptimization)
                 1 -> DiagnosticsScreen(uiState, viewModel)
-                2 -> HistoryScreen(uiState, viewModel)
+                2 -> PeopleScreen(uiState, viewModel)
+                3 -> HistoryScreen(uiState, viewModel)
                 else -> SettingsScreen(uiState, viewModel)
             }
         }
@@ -216,6 +219,58 @@ private fun DiagnosticsScreen(uiState: MainUiState, viewModel: MainViewModel) {
 }
 
 @Composable
+private fun PeopleScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val allowed = remember(uiState.settings.allowedSenderIds) { parseSenderIds(uiState.settings.allowedSenderIds) }
+    val blocked = remember(uiState.settings.blockedSenderIds) { parseSenderIds(uiState.settings.blockedSenderIds) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("People filter", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+        Button(onClick = { viewModel.refreshRecentPeople() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Load recent Telegram people")
+        }
+        Text("Allowed: ${allowed.size} · Blocked: ${blocked.size}", color = Color(0xFFCBD5E1))
+        uiState.recentPeople.forEach { person ->
+            val state = when (person.senderId) {
+                in blocked -> "blocked"
+                in allowed -> "allowed"
+                else -> "default"
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF111827))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(person.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text("@${person.username ?: "-"} · ${person.senderId} · $state", color = Color(0xFF94A3B8))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { viewModel.allowPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
+                        Text("Allow")
+                    }
+                    Button(onClick = { viewModel.blockPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
+                        Text("Block")
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { viewModel.removeAllowedPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
+                        Text("Unallow")
+                    }
+                    Button(onClick = { viewModel.removeBlockedPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
+                        Text("Unblock")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun HistoryScreen(uiState: MainUiState, viewModel: MainViewModel) {
     Column(
         modifier = Modifier
@@ -243,6 +298,12 @@ private fun HistoryScreen(uiState: MainUiState, viewModel: MainViewModel) {
         }
     }
 }
+
+private fun parseSenderIds(value: String): Set<String> =
+    value.split(",", "\n", " ")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toSet()
 
 @Composable
 private fun DiagnosticRow(label: String, value: String) {

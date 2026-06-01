@@ -17,3 +17,10 @@ data class BackendStatus(
     val lastTelegramMessageAt: Long? = null,
     val error: String? = null
 )
+
+data class TelegramPerson(
+    val senderId: String,
+    val name: String,
+    val username: String?,
+    val lastMessageAt: Long?
+)

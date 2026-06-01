@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
 
 import structlog
 from telethon import TelegramClient, events
@@ -13,6 +14,17 @@ from app.domain.events import NewMessageEvent
 
 log = structlog.get_logger(__name__)
 EventHandler = Callable[[NewMessageEvent], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class RecentPerson:
+    sender_id: str
+    name: str
+    username: str | None
+    last_message_at: int | None
+
+    def to_payload(self) -> dict[str, object]:
+        return asdict(self)
 
 
 class TelegramListenerService:
@@ -36,6 +48,7 @@ class TelegramListenerService:
         self._messages_seen = 0
         self._messages_sent = 0
         self._messages_filtered = 0
+        self._recent_people: dict[str, RecentPerson] = {}
 
     async def start(self) -> None:
         self._stop_event.clear()
@@ -105,6 +118,7 @@ class TelegramListenerService:
         )
         self._messages_sent += 1
         self._last_message_at = payload.timestamp
+        self._remember_person(sender, sender_name, payload.timestamp)
         log.info("telegram_new_private_message", chat_id=payload.chat_id, sender_id=payload.sender_id)
         await self._on_event(payload)
 
@@ -124,3 +138,34 @@ class TelegramListenerService:
             "messages_sent": self._messages_sent,
             "messages_filtered": self._messages_filtered,
         }
+
+    async def recent_people(self, limit: int = 50) -> list[dict[str, object]]:
+        if self._client.is_connected():
+            async for dialog in self._client.iter_dialogs(limit=max(limit * 3, 50)):
+                entity = dialog.entity
+                if not isinstance(entity, User) or entity.bot:
+                    continue
+                name = " ".join(part for part in [entity.first_name, entity.last_name] if part).strip()
+                if not name:
+                    name = entity.username or str(entity.id)
+                self._remember_person(
+                    entity,
+                    name,
+                    int(dialog.date.timestamp()) if dialog.date else None,
+                )
+                if len(self._recent_people) >= limit:
+                    break
+        people = sorted(
+            self._recent_people.values(),
+            key=lambda person: person.last_message_at or 0,
+            reverse=True,
+        )
+        return [person.to_payload() for person in people[:limit]]
+
+    def _remember_person(self, sender: User, name: str, last_message_at: int | None) -> None:
+        self._recent_people[str(sender.id)] = RecentPerson(
+            sender_id=str(sender.id),
+            name=name,
+            username=sender.username,
+            last_message_at=last_message_at,
+        )
