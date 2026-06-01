@@ -11,6 +11,7 @@ backend/sessions/
 backend/.pytest_cache/
 android/.gradle/
 android/.kotlin/
+android/gradle/gradle-daemon-jvm.properties
 android/build/
 android/app/build/
 android/local.properties
