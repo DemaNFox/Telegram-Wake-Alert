@@ -169,7 +169,6 @@ private fun MainScreen(
         DiagnosticRow("Battery unrestricted", if (batteryUnrestricted) "ok" else "needs action")
         DiagnosticRow("Backend token", if (uiState.settings.authToken.isNotBlank()) "ok" else "missing")
         DiagnosticRow("Backend connected", if (uiState.connectionStatus == com.nick.telegramalarm.data.model.ConnectionStatus.CONNECTED) "ok" else "no")
-        DiagnosticRow("Encrypted transport", if (uiState.settings.backendUrl.startsWith("wss://")) "ok" else "ws://")
         Button(onClick = onTestAlarm, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.PlayArrow, null)
             Spacer(Modifier.width(8.dp))
@@ -212,9 +211,6 @@ private fun DiagnosticsScreen(uiState: MainUiState, viewModel: MainViewModel) {
             Text("Send backend test")
         }
         uiState.backendTestResult?.let { Text(it, color = Color(0xFFCBD5E1)) }
-        if (uiState.settings.backendUrl.startsWith("ws://") && !uiState.settings.backendUrl.contains("10.0.2.2")) {
-            Text("Public ws:// connection is not encrypted. Use wss:// in production.", color = Color(0xFFFBBF24))
-        }
     }
 }
 
@@ -233,6 +229,7 @@ private fun PeopleScreen(uiState: MainUiState, viewModel: MainViewModel) {
         Button(onClick = { viewModel.refreshRecentPeople() }, modifier = Modifier.fillMaxWidth()) {
             Text("Load recent Telegram people")
         }
+        uiState.peopleLoadResult?.let { Text(it, color = Color(0xFFCBD5E1)) }
         Text("Allowed: ${allowed.size} · Blocked: ${blocked.size}", color = Color(0xFFCBD5E1))
         uiState.recentPeople.forEach { person ->
             val state = when (person.senderId) {

@@ -31,6 +31,7 @@ data class MainUiState(
     val backendStatus: BackendStatus? = null,
     val history: List<AlarmHistoryItem> = emptyList(),
     val recentPeople: List<TelegramPerson> = emptyList(),
+    val peopleLoadResult: String? = null,
     val backendTestResult: String? = null
 )
 
@@ -62,6 +63,7 @@ class MainViewModel @Inject constructor(
             backendStatus = draft.backendStatus,
             history = history,
             recentPeople = draft.recentPeople,
+            peopleLoadResult = draft.peopleLoadResult,
             backendTestResult = draft.backendTestResult
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
@@ -118,8 +120,8 @@ class MainViewModel @Inject constructor(
 
     fun sendBackendTest() = viewModelScope.launch {
         val settings = uiState.value.settings
-        val sent = backendRepository.sendTestEvent(settings.backendUrl, settings.authToken)
-        draft.update { it.copy(backendTestResult = if (sent) "Backend test sent" else "Backend test failed") }
+        val result = backendRepository.sendTestEvent(settings.backendUrl, settings.authToken)
+        draft.update { it.copy(backendTestResult = result.message) }
     }
 
     fun clearHistory() = viewModelScope.launch {
@@ -128,7 +130,9 @@ class MainViewModel @Inject constructor(
 
     fun refreshRecentPeople() = viewModelScope.launch {
         val settings = uiState.value.settings
-        draft.update { it.copy(recentPeople = backendRepository.fetchRecentPeople(settings.backendUrl, settings.authToken)) }
+        draft.update { it.copy(peopleLoadResult = "Loading people...") }
+        val result = backendRepository.fetchRecentPeople(settings.backendUrl, settings.authToken)
+        draft.update { it.copy(recentPeople = result.people, peopleLoadResult = result.message) }
     }
 
     fun allowPerson(senderId: String) = updatePeopleList(senderId, addToAllowed = true)
@@ -145,6 +149,7 @@ class MainViewModel @Inject constructor(
         val authToken: String? = null,
         val backendStatus: BackendStatus? = null,
         val recentPeople: List<TelegramPerson> = emptyList(),
+        val peopleLoadResult: String? = null,
         val backendTestResult: String? = null
     )
 

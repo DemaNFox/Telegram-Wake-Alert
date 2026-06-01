@@ -24,3 +24,13 @@ data class TelegramPerson(
     val username: String?,
     val lastMessageAt: Long?
 )
+
+data class PeopleFetchResult(
+    val people: List<TelegramPerson> = emptyList(),
+    val message: String
+)
+
+data class BackendActionResult(
+    val success: Boolean,
+    val message: String
+)
