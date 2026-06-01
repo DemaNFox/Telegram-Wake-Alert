@@ -17,10 +17,23 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("releaseEnv") {
+            val keystorePath = providers.environmentVariable("TELEGRAM_ALARM_KEYSTORE").orNull
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = providers.environmentVariable("TELEGRAM_ALARM_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("TELEGRAM_ALARM_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("TELEGRAM_ALARM_KEY_PASSWORD").orNull
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("releaseEnv")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {

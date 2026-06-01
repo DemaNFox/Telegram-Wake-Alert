@@ -9,6 +9,28 @@ Production-oriented two-part system for instant Android alarm alerts when a Tele
 
 The backend uses MTProto user login only. It does not use Telegram Bot API.
 
+## Backend Filters
+
+Optional sender filters are configured through `.env`:
+
+```env
+TELEGRAM_ALLOWED_SENDER_IDS=
+TELEGRAM_BLOCKED_SENDER_IDS=
+```
+
+If `TELEGRAM_ALLOWED_SENDER_IDS` is empty, all private non-bot users are allowed unless blocked. If it contains IDs, only those senders trigger Android alarms. `TELEGRAM_BLOCKED_SENDER_IDS` always wins.
+
+## Backend Diagnostics
+
+Authenticated endpoints use the same `WS_AUTH_TOKEN`:
+
+```text
+GET  /status?token=<token>
+POST /test-event?token=<token>
+```
+
+`/status` returns Telegram listener state, WebSocket client count, last heartbeat, and message counters. `/test-event` sends a synthetic alarm event to connected Android clients.
+
 ## Backend Setup
 
 1. Create Telegram API credentials at `https://my.telegram.org`.
@@ -81,6 +103,42 @@ Grant these runtime/system permissions or settings where Android asks:
 - Autostart/background execution permissions on OEM Android builds where available
 
 The foreground service shows `Telegram Alarm Bot Active`, reconnects WebSocket automatically, restarts after process death via `START_STICKY`, and starts after reboot through `BOOT_COMPLETED`.
+
+The app now includes:
+
+- diagnostics tab with heartbeat, last event, reconnect attempts, backend status, and backend test button
+- setup checklist for notifications, battery unrestricted mode, token, connection, and transport encryption
+- alarm history for the latest 50 events
+- connection-lost warning notification after the backend is unreachable for more than one minute
+- quiet hours
+- custom alarm sound URI, alarm duration, and gradual volume ramp
+- stop, mute 1 min, sleep 5 min, and sleep 10 min actions
+- encrypted local storage for the backend auth token
+
+## Android Release Build
+
+Debug APK:
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+
+Release APK signing uses environment variables:
+
+```powershell
+$env:TELEGRAM_ALARM_KEYSTORE="C:\path\telegram-alarm.jks"
+$env:TELEGRAM_ALARM_KEYSTORE_PASSWORD="store-password"
+$env:TELEGRAM_ALARM_KEY_ALIAS="telegram-alarm"
+$env:TELEGRAM_ALARM_KEY_PASSWORD="key-password"
+.\gradlew.bat assembleRelease
+```
+
+Generated APKs are under:
+
+```text
+android/app/build/outputs/apk/
+```
 
 ## Security Notes
 
