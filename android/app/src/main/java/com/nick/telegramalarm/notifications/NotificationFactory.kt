@@ -41,6 +41,15 @@ class NotificationFactory @Inject constructor(
         .setContentIntent(alarmPendingIntent(event))
         .build()
 
+    fun connectionLost(minutes: Long) = NotificationCompat.Builder(context, NotificationChannels.FOREGROUND)
+        .setSmallIcon(R.mipmap.ic_launcher)
+        .setContentTitle("Telegram Alarm disconnected")
+        .setContentText("Backend connection has been down for $minutes min")
+        .setContentIntent(mainPendingIntent())
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setAutoCancel(true)
+        .build()
+
     private fun mainPendingIntent(): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
         return PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

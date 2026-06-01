@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,6 +72,8 @@ class MainActivity : ComponentActivity() {
             TelegramAlarmTheme {
                 MainApp(
                     viewModel = viewModel,
+                    notificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled(),
+                    batteryUnrestricted = isBatteryUnrestricted(),
                     onTestAlarm = { AlarmForegroundService.action(this, ServiceActions.TEST_ALARM) },
                     onBatteryOptimization = { requestBatteryOptimizationIgnore() }
                 )
@@ -98,12 +101,17 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
     }
+
+    private fun isBatteryUnrestricted(): Boolean =
+        getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainApp(
     viewModel: MainViewModel,
+    notificationsEnabled: Boolean,
+    batteryUnrestricted: Boolean,
     onTestAlarm: () -> Unit,
     onBatteryOptimization: () -> Unit
 ) {
@@ -127,7 +135,7 @@ private fun MainApp(
                 Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
             }
             when (tab) {
-                0 -> MainScreen(uiState, onTestAlarm, onBatteryOptimization)
+                0 -> MainScreen(uiState, notificationsEnabled, batteryUnrestricted, onTestAlarm, onBatteryOptimization)
                 1 -> DiagnosticsScreen(uiState, viewModel)
                 2 -> HistoryScreen(uiState, viewModel)
                 else -> SettingsScreen(uiState, viewModel)
@@ -137,7 +145,13 @@ private fun MainApp(
 }
 
 @Composable
-private fun MainScreen(uiState: MainUiState, onTestAlarm: () -> Unit, onBatteryOptimization: () -> Unit) {
+private fun MainScreen(
+    uiState: MainUiState,
+    notificationsEnabled: Boolean,
+    batteryUnrestricted: Boolean,
+    onTestAlarm: () -> Unit,
+    onBatteryOptimization: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -147,6 +161,12 @@ private fun MainScreen(uiState: MainUiState, onTestAlarm: () -> Unit, onBatteryO
     ) {
         Text("Connection", style = MaterialTheme.typography.headlineSmall, color = Color.White)
         Text(uiState.connectionStatus.name, color = Color(0xFF93C5FD), style = MaterialTheme.typography.titleLarge)
+        Text("Setup checklist", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        DiagnosticRow("Notifications", if (notificationsEnabled) "ok" else "missing")
+        DiagnosticRow("Battery unrestricted", if (batteryUnrestricted) "ok" else "needs action")
+        DiagnosticRow("Backend token", if (uiState.settings.authToken.isNotBlank()) "ok" else "missing")
+        DiagnosticRow("Backend connected", if (uiState.connectionStatus == com.nick.telegramalarm.data.model.ConnectionStatus.CONNECTED) "ok" else "no")
+        DiagnosticRow("Encrypted transport", if (uiState.settings.backendUrl.startsWith("wss://")) "ok" else "ws://")
         Button(onClick = onTestAlarm, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.PlayArrow, null)
             Spacer(Modifier.width(8.dp))

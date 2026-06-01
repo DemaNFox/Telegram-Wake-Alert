@@ -3,6 +3,7 @@ package com.nick.telegramalarm.service
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.nick.telegramalarm.data.model.AlarmEvent
 import com.nick.telegramalarm.data.model.AppSettings
@@ -107,10 +108,38 @@ class AlarmForegroundService : Service() {
         scope.launch {
             webSocketClient.status.collect { status ->
                 startForeground(NOTIFICATION_ID, notificationFactory.foreground(status.name.lowercase()))
+                if (status == ConnectionStatus.CONNECTED) {
+                    NotificationManagerCompat.from(this@AlarmForegroundService).cancel(CONNECTION_LOST_NOTIFICATION_ID)
+                }
             }
         }
         scope.launch {
+            connectionLostMonitor()
+        }
+        scope.launch {
             reconnectLoop()
+        }
+    }
+
+    private suspend fun connectionLostMonitor() {
+        var disconnectedSince: Long? = null
+        while (true) {
+            val settings = settingsRepository.settings.first()
+            val status = webSocketClient.status.first()
+            if (settings.serviceEnabled && settings.authToken.isNotBlank() && status != ConnectionStatus.CONNECTED) {
+                val now = System.currentTimeMillis()
+                disconnectedSince = disconnectedSince ?: now
+                val downForMs = now - disconnectedSince
+                if (downForMs >= CONNECTION_LOST_THRESHOLD_MS) {
+                    NotificationManagerCompat.from(this).notify(
+                        CONNECTION_LOST_NOTIFICATION_ID,
+                        notificationFactory.connectionLost(downForMs / 60_000)
+                    )
+                }
+            } else {
+                disconnectedSince = null
+            }
+            delay(30_000L)
         }
     }
 
@@ -154,6 +183,8 @@ class AlarmForegroundService : Service() {
 
     companion object {
         private const val NOTIFICATION_ID = 1001
+        private const val CONNECTION_LOST_NOTIFICATION_ID = 1002
+        private const val CONNECTION_LOST_THRESHOLD_MS = 60_000L
 
         fun start(context: android.content.Context) {
             val intent = Intent(context, AlarmForegroundService::class.java).setAction(ServiceActions.START)
