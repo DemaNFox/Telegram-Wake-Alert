@@ -35,6 +35,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val customAlarmSoundUri = stringPreferencesKey("custom_alarm_sound_uri")
         val alarmDurationSeconds = intPreferencesKey("alarm_duration_seconds")
         val volumeRampEnabled = booleanPreferencesKey("volume_ramp_enabled")
+        val allowedSenderIds = stringPreferencesKey("allowed_sender_ids")
+        val blockedSenderIds = stringPreferencesKey("blocked_sender_ids")
     }
 
     private val securePrefs by lazy {
@@ -64,7 +66,9 @@ class SettingsRepositoryImpl @Inject constructor(
             quietHoursEnd = prefs[Keys.quietHoursEnd] ?: "08:00",
             customAlarmSoundUri = prefs[Keys.customAlarmSoundUri] ?: "",
             alarmDurationSeconds = prefs[Keys.alarmDurationSeconds] ?: 0,
-            volumeRampEnabled = prefs[Keys.volumeRampEnabled] ?: false
+            volumeRampEnabled = prefs[Keys.volumeRampEnabled] ?: false,
+            allowedSenderIds = prefs[Keys.allowedSenderIds] ?: "",
+            blockedSenderIds = prefs[Keys.blockedSenderIds] ?: ""
         )
     }
 
@@ -84,10 +88,18 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateCustomAlarmSoundUri(value: String) = update(Keys.customAlarmSoundUri, value.trim())
     override suspend fun updateAlarmDurationSeconds(value: Int) = update(Keys.alarmDurationSeconds, value.coerceIn(0, 3600))
     override suspend fun updateVolumeRampEnabled(enabled: Boolean) = update(Keys.volumeRampEnabled, enabled)
+    override suspend fun updateAllowedSenderIds(value: String) = update(Keys.allowedSenderIds, normalizeSenderIds(value))
+    override suspend fun updateBlockedSenderIds(value: String) = update(Keys.blockedSenderIds, normalizeSenderIds(value))
 
     private suspend fun <T> update(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
         context.dataStore.edit { it[key] = value }
     }
+
+    private fun normalizeSenderIds(value: String): String =
+        value.split(",", "\n", " ")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(",")
 
     companion object {
         private const val KEY_AUTH_TOKEN = "auth_token"

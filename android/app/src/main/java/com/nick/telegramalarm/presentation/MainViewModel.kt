@@ -105,6 +105,8 @@ class MainViewModel @Inject constructor(
     fun setQuietHoursStart(value: String) = update { settingsRepository.updateQuietHoursStart(value) }
     fun setQuietHoursEnd(value: String) = update { settingsRepository.updateQuietHoursEnd(value) }
     fun setCustomAlarmSoundUri(value: String) = update { settingsRepository.updateCustomAlarmSoundUri(value) }
+    fun setAllowedSenderIds(value: String) = update { settingsRepository.updateAllowedSenderIds(value) }
+    fun setBlockedSenderIds(value: String) = update { settingsRepository.updateBlockedSenderIds(value) }
 
     fun refreshBackendStatus() = viewModelScope.launch {
         val settings = uiState.value.settings

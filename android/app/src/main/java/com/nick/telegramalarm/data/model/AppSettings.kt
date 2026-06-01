@@ -13,5 +13,7 @@ data class AppSettings(
     val quietHoursEnd: String = "08:00",
     val customAlarmSoundUri: String = "",
     val alarmDurationSeconds: Int = 0,
-    val volumeRampEnabled: Boolean = false
+    val volumeRampEnabled: Boolean = false,
+    val allowedSenderIds: String = "",
+    val blockedSenderIds: String = ""
 )

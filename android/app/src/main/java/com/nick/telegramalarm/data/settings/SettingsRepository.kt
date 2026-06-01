@@ -18,4 +18,6 @@ interface SettingsRepository {
     suspend fun updateCustomAlarmSoundUri(value: String)
     suspend fun updateAlarmDurationSeconds(value: Int)
     suspend fun updateVolumeRampEnabled(enabled: Boolean)
+    suspend fun updateAllowedSenderIds(value: String)
+    suspend fun updateBlockedSenderIds(value: String)
 }

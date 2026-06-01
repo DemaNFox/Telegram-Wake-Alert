@@ -9,16 +9,16 @@ Production-oriented two-part system for instant Android alarm alerts when a Tele
 
 The backend uses MTProto user login only. It does not use Telegram Bot API.
 
-## Backend Filters
+## People Filters
 
-Optional sender filters are configured through `.env`:
+People filters are applied on the Android client. The backend still sends every allowed private non-bot Telegram event to connected clients, and each device decides locally whether to play an alarm.
 
-```env
-TELEGRAM_ALLOWED_SENDER_IDS=
-TELEGRAM_BLOCKED_SENDER_IDS=
-```
+In Android settings:
 
-If `TELEGRAM_ALLOWED_SENDER_IDS` is empty, all private non-bot users are allowed unless blocked. If it contains IDs, only those senders trigger Android alarms. `TELEGRAM_BLOCKED_SENDER_IDS` always wins.
+- `Allowed sender IDs`: comma-separated Telegram sender IDs. Empty means all private users are allowed.
+- `Blocked sender IDs`: comma-separated Telegram sender IDs. Blocklist always wins.
+
+Filtered events are stored in alarm history with `people_filter` status.
 
 ## Backend Diagnostics
 

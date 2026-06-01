@@ -87,7 +87,9 @@ class AlarmForegroundService : Service() {
             webSocketClient.events.collect { event ->
                 val settings = settingsRepository.settings.first()
                 if (settings.alertsEnabled) {
-                    if (isQuietNow(settings)) {
+                    if (!isSenderAllowed(event, settings)) {
+                        alarmHistoryRepository.record(event, "people_filter")
+                    } else if (isQuietNow(settings)) {
                         alarmHistoryRepository.record(event, "quiet_hours")
                     } else {
                         alarmHistoryRepository.record(event, "played")
@@ -180,6 +182,20 @@ class AlarmForegroundService : Service() {
             now >= start || now < end
         }
     }
+
+    private fun isSenderAllowed(event: AlarmEvent, settings: AppSettings): Boolean {
+        val senderId = event.senderId.trim()
+        val blocked = parseSenderIds(settings.blockedSenderIds)
+        if (senderId in blocked) return false
+        val allowed = parseSenderIds(settings.allowedSenderIds)
+        return allowed.isEmpty() || senderId in allowed
+    }
+
+    private fun parseSenderIds(value: String): Set<String> =
+        value.split(",", "\n", " ")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
 
     companion object {
         private const val NOTIFICATION_ID = 1001
