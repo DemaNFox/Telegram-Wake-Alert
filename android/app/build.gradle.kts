@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.security.crypto)
     ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

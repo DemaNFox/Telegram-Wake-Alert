@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,8 +22,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -118,12 +122,15 @@ private fun MainApp(
         ) {
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Main") }, icon = { Icon(Icons.Default.NotificationsActive, null) })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Diag") }, icon = { Icon(Icons.Default.CloudSync, null) })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("History") }, icon = { Icon(Icons.Default.History, null) })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
             }
-            if (tab == 0) {
-                MainScreen(uiState, onTestAlarm, onBatteryOptimization)
-            } else {
-                SettingsScreen(uiState, viewModel)
+            when (tab) {
+                0 -> MainScreen(uiState, onTestAlarm, onBatteryOptimization)
+                1 -> DiagnosticsScreen(uiState, viewModel)
+                2 -> HistoryScreen(uiState, viewModel)
+                else -> SettingsScreen(uiState, viewModel)
             }
         }
     }
@@ -134,6 +141,7 @@ private fun MainScreen(uiState: MainUiState, onTestAlarm: () -> Unit, onBatteryO
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
@@ -153,10 +161,83 @@ private fun MainScreen(uiState: MainUiState, onTestAlarm: () -> Unit, onBatteryO
 }
 
 @Composable
+private fun DiagnosticsScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Diagnostics", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+        DiagnosticRow("WebSocket", uiState.connectionStatus.name)
+        DiagnosticRow("Last connected", uiState.diagnostics.lastConnectedAt?.toString() ?: "-")
+        DiagnosticRow("Last heartbeat", uiState.diagnostics.lastHeartbeatAt?.toString() ?: "-")
+        DiagnosticRow("Last event", uiState.diagnostics.lastEventAt?.toString() ?: "-")
+        DiagnosticRow("Reconnect attempts", uiState.diagnostics.reconnectAttempts.toString())
+        DiagnosticRow("Last failure", uiState.diagnostics.lastFailureReason ?: "-")
+        Button(onClick = { viewModel.refreshBackendStatus() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Refresh backend status")
+        }
+        uiState.backendStatus?.let { status ->
+            DiagnosticRow("Backend reachable", status.reachable.toString())
+            DiagnosticRow("Telegram connected", status.telegramConnected?.toString() ?: "-")
+            DiagnosticRow("WS clients", status.websocketClients?.toString() ?: "-")
+            DiagnosticRow("Backend error", status.error ?: "-")
+        }
+        Button(onClick = { viewModel.sendBackendTest() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Send backend test")
+        }
+        uiState.backendTestResult?.let { Text(it, color = Color(0xFFCBD5E1)) }
+        if (uiState.settings.backendUrl.startsWith("ws://") && !uiState.settings.backendUrl.contains("10.0.2.2")) {
+            Text("Public ws:// connection is not encrypted. Use wss:// in production.", color = Color(0xFFFBBF24))
+        }
+    }
+}
+
+@Composable
+private fun HistoryScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Alarm history", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+            Button(onClick = { viewModel.clearHistory() }) { Text("Clear") }
+        }
+        uiState.history.forEach { item ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF111827))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(item.senderName, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text(item.message, color = Color(0xFFCBD5E1))
+                Text("${item.timestamp} · ${item.status}", color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Color(0xFFCBD5E1))
+        Text(value, color = Color.White)
+    }
+}
+
+@Composable
 private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

@@ -1,5 +1,9 @@
 package com.nick.telegramalarm.di
 
+import com.nick.telegramalarm.data.backend.BackendRepository
+import com.nick.telegramalarm.data.backend.BackendRepositoryImpl
+import com.nick.telegramalarm.data.history.AlarmHistoryRepository
+import com.nick.telegramalarm.data.history.AlarmHistoryRepositoryImpl
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.data.settings.SettingsRepositoryImpl
 import com.nick.telegramalarm.domain.AlarmController
@@ -21,6 +25,14 @@ abstract class AppModule {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAlarmHistoryRepository(impl: AlarmHistoryRepositoryImpl): AlarmHistoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBackendRepository(impl: BackendRepositoryImpl): BackendRepository
 
     @Binds
     @Singleton

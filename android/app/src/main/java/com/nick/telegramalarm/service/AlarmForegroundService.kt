@@ -6,6 +6,7 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.nick.telegramalarm.data.model.AlarmEvent
 import com.nick.telegramalarm.data.model.ConnectionStatus
+import com.nick.telegramalarm.data.history.AlarmHistoryRepository
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.domain.AlarmController
 import com.nick.telegramalarm.network.AlarmWebSocketClient
@@ -30,6 +31,7 @@ class AlarmForegroundService : Service() {
     @Inject lateinit var webSocketClient: AlarmWebSocketClient
     @Inject lateinit var alarmController: AlarmController
     @Inject lateinit var notificationFactory: NotificationFactory
+    @Inject lateinit var alarmHistoryRepository: AlarmHistoryRepository
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val clientId = UUID.randomUUID().toString()
@@ -76,7 +78,12 @@ class AlarmForegroundService : Service() {
         scope.launch {
             webSocketClient.events.collect { event ->
                 val settings = settingsRepository.settings.first()
-                if (settings.alertsEnabled) alarmController.trigger(event, settings.volume)
+                if (settings.alertsEnabled) {
+                    alarmHistoryRepository.record(event, "played")
+                    alarmController.trigger(event, settings.volume)
+                } else {
+                    alarmHistoryRepository.record(event, "alerts_disabled")
+                }
             }
         }
         scope.launch {
