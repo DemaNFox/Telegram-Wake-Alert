@@ -9,6 +9,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Stop
@@ -27,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nick.telegramalarm.data.model.AlarmEvent
 import com.nick.telegramalarm.service.AlarmForegroundService
@@ -105,15 +108,43 @@ private fun AlarmScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF111827))
+            .verticalScroll(rememberScrollState())
             .padding(28.dp),
         verticalArrangement = Arrangement.Center
     ) {
         Text("Telegram message", style = MaterialTheme.typography.headlineMedium, color = Color(0xFFF87171))
-        Spacer(Modifier.height(18.dp))
-        Text(senderName, style = MaterialTheme.typography.displaySmall, color = Color.White)
+        Spacer(Modifier.height(20.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF1F2937))
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("Sender", style = MaterialTheme.typography.labelLarge, color = Color(0xFF93C5FD))
+            Text(
+                senderName.ifBlank { "Unknown sender" },
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
         Spacer(Modifier.height(14.dp))
-        Text(message, style = MaterialTheme.typography.titleLarge, color = Color(0xFFE5E7EB))
-        Spacer(Modifier.height(36.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF0F172A))
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Message", style = MaterialTheme.typography.labelLarge, color = Color(0xFFFCA5A5))
+            Text(
+                message.ifBlank { "No text preview" },
+                style = MaterialTheme.typography.titleLarge,
+                color = Color(0xFFE5E7EB)
+            )
+        }
+        Spacer(Modifier.height(28.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Button(onClick = onStop, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.Stop, null)
