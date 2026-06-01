@@ -27,7 +27,8 @@ data class TelegramPerson(
 
 data class PeopleFetchResult(
     val people: List<TelegramPerson> = emptyList(),
-    val message: String
+    val message: String,
+    val success: Boolean = false
 )
 
 data class BackendActionResult(

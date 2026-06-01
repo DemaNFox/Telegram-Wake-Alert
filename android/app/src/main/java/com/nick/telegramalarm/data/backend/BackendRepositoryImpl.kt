@@ -69,7 +69,7 @@ class BackendRepositoryImpl @Inject constructor(
                         )
                     }
                 }
-                PeopleFetchResult(people = people, message = "Loaded ${people.size} people")
+                PeopleFetchResult(people = people, message = "Loaded ${people.size} people", success = true)
             }
         }.getOrElse { PeopleFetchResult(message = "People load failed: ${it.message ?: it.javaClass.simpleName}") }
     }

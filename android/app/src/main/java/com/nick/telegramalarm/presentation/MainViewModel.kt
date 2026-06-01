@@ -10,6 +10,7 @@ import com.nick.telegramalarm.data.model.BackendStatus
 import com.nick.telegramalarm.data.model.ConnectionDiagnostics
 import com.nick.telegramalarm.data.model.ConnectionStatus
 import com.nick.telegramalarm.data.model.TelegramPerson
+import com.nick.telegramalarm.data.people.PeopleCacheRepository
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.network.AlarmWebSocketClient
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,27 +39,40 @@ class MainViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val backendRepository: BackendRepository,
     private val alarmHistoryRepository: AlarmHistoryRepository,
+    private val peopleCacheRepository: PeopleCacheRepository,
     webSocketClient: AlarmWebSocketClient
 ) : ViewModel() {
     private val draft = MutableStateFlow(SettingsDraft())
-
-    val uiState: StateFlow<MainUiState> = combine(
+    private val baseUiState = combine(
         settingsRepository.settings,
         webSocketClient.status,
         webSocketClient.diagnostics,
         alarmHistoryRepository.history,
-        draft
-    ) { settings, status, diagnostics, history, draft ->
-        MainUiState(
-            settings = settings.copy(
-                backendUrl = draft.backendUrl ?: settings.backendUrl,
-                authToken = draft.authToken ?: settings.authToken
-            ),
+        peopleCacheRepository.people
+    ) { settings, status, diagnostics, history, cachedPeople ->
+        BaseUiState(
+            settings = settings,
             connectionStatus = status,
             diagnostics = diagnostics,
-            backendStatus = draft.backendStatus,
             history = history,
-            recentPeople = draft.recentPeople,
+            recentPeople = cachedPeople
+        )
+    }
+
+    val uiState: StateFlow<MainUiState> = combine(
+        baseUiState,
+        draft
+    ) { base, draft ->
+        MainUiState(
+            settings = base.settings.copy(
+                backendUrl = draft.backendUrl ?: base.settings.backendUrl,
+                authToken = draft.authToken ?: base.settings.authToken
+            ),
+            connectionStatus = base.connectionStatus,
+            diagnostics = base.diagnostics,
+            backendStatus = draft.backendStatus,
+            history = base.history,
+            recentPeople = base.recentPeople,
             peopleLoadResult = draft.peopleLoadResult,
             backendTestResult = draft.backendTestResult
         )
@@ -132,7 +146,10 @@ class MainViewModel @Inject constructor(
         val settings = uiState.value.settings
         draft.update { it.copy(peopleLoadResult = "Loading people...") }
         val result = backendRepository.fetchRecentPeople(settings.backendUrl, settings.authToken)
-        draft.update { it.copy(recentPeople = result.people, peopleLoadResult = result.message) }
+        if (result.success) {
+            peopleCacheRepository.replacePeople(result.people)
+        }
+        draft.update { it.copy(peopleLoadResult = result.message) }
     }
 
     fun allowPerson(senderId: String) = updatePeopleList(senderId, addToAllowed = true)
@@ -148,9 +165,16 @@ class MainViewModel @Inject constructor(
         val backendUrl: String? = null,
         val authToken: String? = null,
         val backendStatus: BackendStatus? = null,
-        val recentPeople: List<TelegramPerson> = emptyList(),
         val peopleLoadResult: String? = null,
         val backendTestResult: String? = null
+    )
+
+    private data class BaseUiState(
+        val settings: AppSettings,
+        val connectionStatus: ConnectionStatus,
+        val diagnostics: ConnectionDiagnostics,
+        val history: List<AlarmHistoryItem>,
+        val recentPeople: List<TelegramPerson>
     )
 
     private fun updatePeopleList(
