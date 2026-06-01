@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.nick.telegramalarm.data.model.AppSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -25,8 +27,20 @@ class SettingsRepositoryImpl @Inject constructor(
         val useDefaultAlarmSound = booleanPreferencesKey("use_default_alarm_sound")
         val autoReconnect = booleanPreferencesKey("auto_reconnect")
         val backendUrl = stringPreferencesKey("backend_url")
-        val authToken = stringPreferencesKey("auth_token")
         val serviceEnabled = booleanPreferencesKey("service_enabled")
+    }
+
+    private val securePrefs by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "telegram_alarm_secure",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
     }
 
     override val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -36,7 +50,7 @@ class SettingsRepositoryImpl @Inject constructor(
             useDefaultAlarmSound = prefs[Keys.useDefaultAlarmSound] ?: true,
             autoReconnect = prefs[Keys.autoReconnect] ?: true,
             backendUrl = prefs[Keys.backendUrl] ?: "ws://10.0.2.2:8000/ws",
-            authToken = prefs[Keys.authToken] ?: "",
+            authToken = securePrefs.getString(KEY_AUTH_TOKEN, "").orEmpty(),
             serviceEnabled = prefs[Keys.serviceEnabled] ?: true
         )
     }
@@ -46,10 +60,17 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateUseDefaultAlarmSound(enabled: Boolean) = update(Keys.useDefaultAlarmSound, enabled)
     override suspend fun updateAutoReconnect(enabled: Boolean) = update(Keys.autoReconnect, enabled)
     override suspend fun updateBackendUrl(url: String) = update(Keys.backendUrl, url.trim())
-    override suspend fun updateAuthToken(token: String) = update(Keys.authToken, token.trim())
+    override suspend fun updateAuthToken(token: String) {
+        securePrefs.edit().putString(KEY_AUTH_TOKEN, token.trim()).apply()
+        context.dataStore.edit { it[Keys.serviceEnabled] = it[Keys.serviceEnabled] ?: true }
+    }
     override suspend fun updateServiceEnabled(enabled: Boolean) = update(Keys.serviceEnabled, enabled)
 
     private suspend fun <T> update(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
         context.dataStore.edit { it[key] = value }
+    }
+
+    companion object {
+        private const val KEY_AUTH_TOKEN = "auth_token"
     }
 }
