@@ -52,7 +52,11 @@ class AlarmControllerImpl @Inject constructor(
     }
 
     override fun muteOneMinute() {
-        mutedUntilMillis = System.currentTimeMillis() + 60_000
+        snooze(1)
+    }
+
+    override fun snooze(minutes: Int) {
+        mutedUntilMillis = System.currentTimeMillis() + minutes.coerceAtLeast(1) * 60_000L
         stop()
     }
 

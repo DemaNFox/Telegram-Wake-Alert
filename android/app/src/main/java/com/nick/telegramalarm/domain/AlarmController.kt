@@ -6,4 +6,5 @@ interface AlarmController {
     fun trigger(event: AlarmEvent, volume: Float, soundUri: String?, volumeRampEnabled: Boolean)
     fun stop()
     fun muteOneMinute()
+    fun snooze(minutes: Int)
 }

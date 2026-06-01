@@ -51,6 +51,14 @@ class AlarmActivity : ComponentActivity() {
                     onMute = {
                         AlarmForegroundService.action(this, ServiceActions.MUTE_ONE_MINUTE)
                         finish()
+                    },
+                    onSnoozeFive = {
+                        AlarmForegroundService.action(this, ServiceActions.SNOOZE_FIVE_MINUTES)
+                        finish()
+                    },
+                    onSnoozeTen = {
+                        AlarmForegroundService.action(this, ServiceActions.SNOOZE_TEN_MINUTES)
+                        finish()
                     }
                 )
             }
@@ -85,7 +93,14 @@ class AlarmActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AlarmScreen(senderName: String, message: String, onStop: () -> Unit, onMute: () -> Unit) {
+private fun AlarmScreen(
+    senderName: String,
+    message: String,
+    onStop: () -> Unit,
+    onMute: () -> Unit,
+    onSnoozeFive: () -> Unit,
+    onSnoozeTen: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -107,6 +122,17 @@ private fun AlarmScreen(senderName: String, message: String, onStop: () -> Unit,
             Button(onClick = onMute, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.NotificationsOff, null)
                 Text("Mute 1 min")
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = onSnoozeFive, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.NotificationsOff, null)
+                Text("Sleep 5 min")
+            }
+            Button(onClick = onSnoozeTen, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.NotificationsOff, null)
+                Text("Sleep 10 min")
             }
         }
     }

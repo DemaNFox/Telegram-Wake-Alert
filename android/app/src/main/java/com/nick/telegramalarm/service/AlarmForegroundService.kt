@@ -47,6 +47,8 @@ class AlarmForegroundService : Service() {
         when (intent?.action) {
             ServiceActions.STOP_ALARM -> alarmController.stop()
             ServiceActions.MUTE_ONE_MINUTE -> alarmController.muteOneMinute()
+            ServiceActions.SNOOZE_FIVE_MINUTES -> alarmController.snooze(5)
+            ServiceActions.SNOOZE_TEN_MINUTES -> alarmController.snooze(10)
             ServiceActions.TEST_ALARM -> scope.launch {
                 val settings = settingsRepository.settings.first()
                 val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
