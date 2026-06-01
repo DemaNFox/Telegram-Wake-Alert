@@ -141,20 +141,26 @@ class TelegramListenerService:
 
     async def recent_people(self, limit: int = 50) -> list[dict[str, object]]:
         if self._client.is_connected():
-            async for dialog in self._client.iter_dialogs(limit=max(limit * 3, 50)):
-                entity = dialog.entity
-                if not isinstance(entity, User) or entity.bot:
-                    continue
-                name = " ".join(part for part in [entity.first_name, entity.last_name] if part).strip()
-                if not name:
-                    name = entity.username or str(entity.id)
-                self._remember_person(
-                    entity,
-                    name,
-                    int(dialog.date.timestamp()) if dialog.date else None,
-                )
-                if len(self._recent_people) >= limit:
-                    break
+            try:
+                async for dialog in self._client.iter_dialogs(limit=max(limit * 3, 50)):
+                    entity = dialog.entity
+                    if not isinstance(entity, User) or entity.bot:
+                        continue
+                    name = " ".join(part for part in [entity.first_name, entity.last_name] if part).strip()
+                    if not name:
+                        name = entity.username or str(entity.id)
+                    last_message = getattr(dialog, "message", None)
+                    last_message_date = getattr(last_message, "date", None)
+                    self._remember_person(
+                        entity,
+                        name,
+                        int(last_message_date.timestamp()) if last_message_date else None,
+                    )
+                    if len(self._recent_people) >= limit:
+                        break
+            except RPCError as exc:
+                self._last_error = str(exc)
+                log.error("telegram_recent_people_error", error=str(exc))
         people = sorted(
             self._recent_people.values(),
             key=lambda person: person.last_message_at or 0,
