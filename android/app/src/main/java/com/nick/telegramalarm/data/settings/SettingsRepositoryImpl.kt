@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -28,6 +29,12 @@ class SettingsRepositoryImpl @Inject constructor(
         val autoReconnect = booleanPreferencesKey("auto_reconnect")
         val backendUrl = stringPreferencesKey("backend_url")
         val serviceEnabled = booleanPreferencesKey("service_enabled")
+        val quietHoursEnabled = booleanPreferencesKey("quiet_hours_enabled")
+        val quietHoursStart = stringPreferencesKey("quiet_hours_start")
+        val quietHoursEnd = stringPreferencesKey("quiet_hours_end")
+        val customAlarmSoundUri = stringPreferencesKey("custom_alarm_sound_uri")
+        val alarmDurationSeconds = intPreferencesKey("alarm_duration_seconds")
+        val volumeRampEnabled = booleanPreferencesKey("volume_ramp_enabled")
     }
 
     private val securePrefs by lazy {
@@ -51,7 +58,13 @@ class SettingsRepositoryImpl @Inject constructor(
             autoReconnect = prefs[Keys.autoReconnect] ?: true,
             backendUrl = prefs[Keys.backendUrl] ?: "ws://10.0.2.2:8000/ws",
             authToken = securePrefs.getString(KEY_AUTH_TOKEN, "").orEmpty(),
-            serviceEnabled = prefs[Keys.serviceEnabled] ?: true
+            serviceEnabled = prefs[Keys.serviceEnabled] ?: true,
+            quietHoursEnabled = prefs[Keys.quietHoursEnabled] ?: false,
+            quietHoursStart = prefs[Keys.quietHoursStart] ?: "23:00",
+            quietHoursEnd = prefs[Keys.quietHoursEnd] ?: "08:00",
+            customAlarmSoundUri = prefs[Keys.customAlarmSoundUri] ?: "",
+            alarmDurationSeconds = prefs[Keys.alarmDurationSeconds] ?: 0,
+            volumeRampEnabled = prefs[Keys.volumeRampEnabled] ?: false
         )
     }
 
@@ -65,6 +78,12 @@ class SettingsRepositoryImpl @Inject constructor(
         context.dataStore.edit { it[Keys.serviceEnabled] = it[Keys.serviceEnabled] ?: true }
     }
     override suspend fun updateServiceEnabled(enabled: Boolean) = update(Keys.serviceEnabled, enabled)
+    override suspend fun updateQuietHoursEnabled(enabled: Boolean) = update(Keys.quietHoursEnabled, enabled)
+    override suspend fun updateQuietHoursStart(value: String) = update(Keys.quietHoursStart, value.trim())
+    override suspend fun updateQuietHoursEnd(value: String) = update(Keys.quietHoursEnd, value.trim())
+    override suspend fun updateCustomAlarmSoundUri(value: String) = update(Keys.customAlarmSoundUri, value.trim())
+    override suspend fun updateAlarmDurationSeconds(value: Int) = update(Keys.alarmDurationSeconds, value.coerceIn(0, 3600))
+    override suspend fun updateVolumeRampEnabled(enabled: Boolean) = update(Keys.volumeRampEnabled, enabled)
 
     private suspend fun <T> update(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
         context.dataStore.edit { it[key] = value }

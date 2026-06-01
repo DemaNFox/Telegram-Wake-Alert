@@ -80,6 +80,9 @@ class MainViewModel @Inject constructor(
     fun setVolume(value: Float) = update { settingsRepository.updateVolume(value) }
     fun setUseDefaultAlarmSound(value: Boolean) = update { settingsRepository.updateUseDefaultAlarmSound(value) }
     fun setAutoReconnect(value: Boolean) = update { settingsRepository.updateAutoReconnect(value) }
+    fun setQuietHoursEnabled(value: Boolean) = update { settingsRepository.updateQuietHoursEnabled(value) }
+    fun setVolumeRampEnabled(value: Boolean) = update { settingsRepository.updateVolumeRampEnabled(value) }
+    fun setAlarmDurationSeconds(value: Int) = update { settingsRepository.updateAlarmDurationSeconds(value) }
 
     fun setBackendUrl(value: String) {
         draft.update { it.copy(backendUrl = value) }
@@ -98,6 +101,10 @@ class MainViewModel @Inject constructor(
             settingsRepository.updateAuthToken(value)
         }
     }
+
+    fun setQuietHoursStart(value: String) = update { settingsRepository.updateQuietHoursStart(value) }
+    fun setQuietHoursEnd(value: String) = update { settingsRepository.updateQuietHoursEnd(value) }
+    fun setCustomAlarmSoundUri(value: String) = update { settingsRepository.updateCustomAlarmSoundUri(value) }
 
     fun refreshBackendStatus() = viewModelScope.launch {
         val settings = uiState.value.settings

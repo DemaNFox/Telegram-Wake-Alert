@@ -244,8 +244,37 @@ private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
         SwitchRow("Enable alerts", uiState.settings.alertsEnabled) { viewModel.setAlertsEnabled(it) }
         SwitchRow("Auto reconnect", uiState.settings.autoReconnect) { viewModel.setAutoReconnect(it) }
         SwitchRow("Use default alarm sound", uiState.settings.useDefaultAlarmSound) { viewModel.setUseDefaultAlarmSound(it) }
+        SwitchRow("Gradual volume ramp", uiState.settings.volumeRampEnabled) { viewModel.setVolumeRampEnabled(it) }
+        SwitchRow("Quiet hours", uiState.settings.quietHoursEnabled) { viewModel.setQuietHoursEnabled(it) }
         Text("Alarm volume ${(uiState.settings.volume * 100).toInt()}%", color = Color.White)
         Slider(value = uiState.settings.volume, onValueChange = { viewModel.setVolume(it) }, valueRange = 0.1f..1f)
+        Text("Alarm duration ${if (uiState.settings.alarmDurationSeconds == 0) "until stopped" else "${uiState.settings.alarmDurationSeconds}s"}", color = Color.White)
+        Slider(
+            value = uiState.settings.alarmDurationSeconds.toFloat(),
+            onValueChange = { viewModel.setAlarmDurationSeconds(it.toInt()) },
+            valueRange = 0f..600f
+        )
+        OutlinedTextField(
+            value = uiState.settings.quietHoursStart,
+            onValueChange = { viewModel.setQuietHoursStart(it) },
+            label = { Text("Quiet hours start HH:mm") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = uiState.settings.quietHoursEnd,
+            onValueChange = { viewModel.setQuietHoursEnd(it) },
+            label = { Text("Quiet hours end HH:mm") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = uiState.settings.customAlarmSoundUri,
+            onValueChange = { viewModel.setCustomAlarmSoundUri(it) },
+            label = { Text("Custom alarm sound URI") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
         OutlinedTextField(
             value = uiState.settings.backendUrl,
             onValueChange = { viewModel.setBackendUrl(it) },

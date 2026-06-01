@@ -6,6 +6,9 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
@@ -25,20 +28,24 @@ class AlarmControllerImpl @Inject constructor(
     private var player: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var mutedUntilMillis: Long = 0
+    private val handler = Handler(Looper.getMainLooper())
+    private var rampRunnable: Runnable? = null
 
-    override fun trigger(event: AlarmEvent, volume: Float) {
+    override fun trigger(event: AlarmEvent, volume: Float, soundUri: String?, volumeRampEnabled: Boolean) {
         if (System.currentTimeMillis() < mutedUntilMillis) return
         acquireWakeLock()
         maximizeAlarmVolume(volume)
         showFullScreenActivity(event)
         NotificationManagerCompat.from(context).notify(ALARM_NOTIFICATION_ID, notificationFactory.alarm(event))
-        playAlarm(volume)
+        playAlarm(volume, soundUri, volumeRampEnabled)
     }
 
     override fun stop() {
         player?.runCatching { stop() }
         player?.release()
         player = null
+        rampRunnable?.let { handler.removeCallbacks(it) }
+        rampRunnable = null
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
         context.getSystemService(NotificationManager::class.java).cancel(ALARM_NOTIFICATION_ID)
@@ -66,7 +73,7 @@ class AlarmControllerImpl @Inject constructor(
         }
     }
 
-    private fun playAlarm(volume: Float) {
+    private fun playAlarm(volume: Float, soundUri: String?, volumeRampEnabled: Boolean) {
         player?.release()
         player = runCatching {
             MediaPlayer().apply {
@@ -76,13 +83,27 @@ class AlarmControllerImpl @Inject constructor(
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
-                setDataSource(context, Settings.System.DEFAULT_ALARM_ALERT_URI)
+                setDataSource(context, soundUri?.takeIf { it.isNotBlank() }?.let(Uri::parse) ?: Settings.System.DEFAULT_ALARM_ALERT_URI)
                 isLooping = true
-                setVolume(volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f))
+                val initialVolume = if (volumeRampEnabled) 0.1f else volume.coerceIn(0f, 1f)
+                setVolume(initialVolume, initialVolume)
                 prepare()
                 start()
+                if (volumeRampEnabled) startVolumeRamp(this, volume.coerceIn(0f, 1f))
             }
         }.getOrNull()
+    }
+
+    private fun startVolumeRamp(mediaPlayer: MediaPlayer, targetVolume: Float) {
+        var step = 1
+        rampRunnable = object : Runnable {
+            override fun run() {
+                val nextVolume = (targetVolume * step / RAMP_STEPS).coerceIn(0.1f, targetVolume)
+                runCatching { mediaPlayer.setVolume(nextVolume, nextVolume) }
+                step += 1
+                if (step <= RAMP_STEPS) handler.postDelayed(this, RAMP_INTERVAL_MS)
+            }
+        }.also { handler.postDelayed(it, RAMP_INTERVAL_MS) }
     }
 
     private fun showFullScreenActivity(event: AlarmEvent) {
@@ -95,5 +116,7 @@ class AlarmControllerImpl @Inject constructor(
 
     companion object {
         private const val ALARM_NOTIFICATION_ID = 2001
+        private const val RAMP_STEPS = 10
+        private const val RAMP_INTERVAL_MS = 3_000L
     }
 }

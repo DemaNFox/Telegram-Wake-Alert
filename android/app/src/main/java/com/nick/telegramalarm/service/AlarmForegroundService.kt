@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.nick.telegramalarm.data.model.AlarmEvent
+import com.nick.telegramalarm.data.model.AppSettings
 import com.nick.telegramalarm.data.model.ConnectionStatus
 import com.nick.telegramalarm.data.history.AlarmHistoryRepository
 import com.nick.telegramalarm.data.settings.SettingsRepository
@@ -46,7 +47,11 @@ class AlarmForegroundService : Service() {
         when (intent?.action) {
             ServiceActions.STOP_ALARM -> alarmController.stop()
             ServiceActions.MUTE_ONE_MINUTE -> alarmController.muteOneMinute()
-            ServiceActions.TEST_ALARM -> scope.launch { alarmController.trigger(testEvent(), settingsRepository.settings.first().volume) }
+            ServiceActions.TEST_ALARM -> scope.launch {
+                val settings = settingsRepository.settings.first()
+                val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
+                alarmController.trigger(testEvent(), settings.volume, soundUri, settings.volumeRampEnabled)
+            }
             else -> startCollectorsOnce()
         }
         return START_STICKY
@@ -79,8 +84,19 @@ class AlarmForegroundService : Service() {
             webSocketClient.events.collect { event ->
                 val settings = settingsRepository.settings.first()
                 if (settings.alertsEnabled) {
-                    alarmHistoryRepository.record(event, "played")
-                    alarmController.trigger(event, settings.volume)
+                    if (isQuietNow(settings)) {
+                        alarmHistoryRepository.record(event, "quiet_hours")
+                    } else {
+                        alarmHistoryRepository.record(event, "played")
+                        val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
+                        alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)
+                        if (settings.alarmDurationSeconds > 0) {
+                            launch {
+                                delay(settings.alarmDurationSeconds * 1000L)
+                                alarmController.stop()
+                            }
+                        }
+                    }
                 } else {
                     alarmHistoryRepository.record(event, "alerts_disabled")
                 }
@@ -121,6 +137,18 @@ class AlarmForegroundService : Service() {
         message = "This is a local alarm test.",
         timestamp = System.currentTimeMillis() / 1000
     )
+
+    private fun isQuietNow(settings: AppSettings): Boolean {
+        if (!settings.quietHoursEnabled) return false
+        val now = java.time.LocalTime.now()
+        val start = runCatching { java.time.LocalTime.parse(settings.quietHoursStart) }.getOrNull() ?: return false
+        val end = runCatching { java.time.LocalTime.parse(settings.quietHoursEnd) }.getOrNull() ?: return false
+        return if (start <= end) {
+            now >= start && now < end
+        } else {
+            now >= start || now < end
+        }
+    }
 
     companion object {
         private const val NOTIFICATION_ID = 1001
