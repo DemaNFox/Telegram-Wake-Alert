@@ -92,14 +92,6 @@ class TelegramListenerService:
             self._mark_filtered("bot_or_non_user")
             return
         self._messages_seen += 1
-        if sender.id in self._settings.telegram_blocked_sender_ids:
-            self._mark_filtered("blocked_sender")
-            log.info("telegram_message_filtered", sender_id=sender.id, reason="blocked_sender")
-            return
-        if self._settings.telegram_allowed_sender_ids and sender.id not in self._settings.telegram_allowed_sender_ids:
-            self._mark_filtered("not_allowed_sender")
-            log.info("telegram_message_filtered", sender_id=sender.id, reason="not_allowed_sender")
-            return
         sender_name = " ".join(part for part in [sender.first_name, sender.last_name] if part).strip()
         if not sender_name:
             sender_name = sender.username or str(sender.id)
@@ -131,6 +123,4 @@ class TelegramListenerService:
             "messages_seen": self._messages_seen,
             "messages_sent": self._messages_sent,
             "messages_filtered": self._messages_filtered,
-            "allowed_sender_ids_count": len(self._settings.telegram_allowed_sender_ids),
-            "blocked_sender_ids_count": len(self._settings.telegram_blocked_sender_ids),
         }
