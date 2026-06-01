@@ -86,26 +86,19 @@ class AlarmForegroundService : Service() {
         scope.launch {
             webSocketClient.events.collect { event ->
                 val settings = settingsRepository.settings.first()
-                if (settings.alertsEnabled) {
-                    if (!isEventSourceEnabled(event, settings)) {
-                        alarmHistoryRepository.record(event, "source_filter")
-                    } else if (!isSenderAllowed(event, settings)) {
-                        alarmHistoryRepository.record(event, "people_filter")
-                    } else if (isQuietNow(settings)) {
-                        alarmHistoryRepository.record(event, "quiet_hours")
-                    } else {
-                        alarmHistoryRepository.record(event, "played")
-                        val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
-                        alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)
-                        if (settings.alarmDurationSeconds > 0) {
-                            launch {
-                                delay(settings.alarmDurationSeconds * 1000L)
-                                alarmController.stop()
-                            }
-                        }
+                if (!settings.alertsEnabled) return@collect
+                if (!isEventSourceEnabled(event, settings)) return@collect
+                if (!isSenderAllowed(event, settings)) return@collect
+                if (isQuietNow(settings)) return@collect
+
+                alarmHistoryRepository.record(event, "played")
+                val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
+                alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)
+                if (settings.alarmDurationSeconds > 0) {
+                    launch {
+                        delay(settings.alarmDurationSeconds * 1000L)
+                        alarmController.stop()
                     }
-                } else {
-                    alarmHistoryRepository.record(event, "alerts_disabled")
                 }
             }
         }
