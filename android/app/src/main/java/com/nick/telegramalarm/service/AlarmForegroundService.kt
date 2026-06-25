@@ -1,7 +1,11 @@
 package com.nick.telegramalarm.service
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -16,6 +20,7 @@ import com.nick.telegramalarm.notifications.NotificationFactory
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -38,6 +43,7 @@ class AlarmForegroundService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val clientId = UUID.randomUUID().toString()
     private var started = false
+    private var alarmTimeoutJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -46,14 +52,16 @@ class AlarmForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ServiceActions.STOP_ALARM -> alarmController.stop()
-            ServiceActions.MUTE_ONE_MINUTE -> alarmController.muteOneMinute()
-            ServiceActions.SNOOZE_FIVE_MINUTES -> alarmController.snooze(5)
-            ServiceActions.SNOOZE_TEN_MINUTES -> alarmController.snooze(10)
+            ServiceActions.STOP_ALARM -> stopCurrentAlarm()
+            ServiceActions.MUTE_ONE_MINUTE -> snoozeCurrentAlarm(1)
+            ServiceActions.SNOOZE_FIVE_MINUTES -> snoozeCurrentAlarm(5)
+            ServiceActions.SNOOZE_TEN_MINUTES -> snoozeCurrentAlarm(10)
             ServiceActions.TEST_ALARM -> scope.launch {
                 val settings = settingsRepository.settings.first()
                 val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
-                alarmController.trigger(testEvent(), settings.volume, soundUri, settings.volumeRampEnabled)
+                if (alarmController.trigger(testEvent(), settings.volume, soundUri, settings.volumeRampEnabled)) {
+                    scheduleAlarmStop(settings.alarmDurationSeconds)
+                }
             }
             else -> startCollectorsOnce()
         }
@@ -63,6 +71,7 @@ class AlarmForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        stopCurrentAlarm()
         webSocketClient.disconnect()
         scope.cancel()
         super.onDestroy()
@@ -91,15 +100,12 @@ class AlarmForegroundService : Service() {
                 if (!isSenderAllowed(event, settings)) return@collect
                 if (isQuietNow(settings)) return@collect
 
-                alarmHistoryRepository.record(event, "played")
                 val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
-                alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)
-                if (settings.alarmDurationSeconds > 0) {
-                    launch {
-                        delay(settings.alarmDurationSeconds * 1000L)
-                        alarmController.stop()
-                    }
+                if (!alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)) {
+                    return@collect
                 }
+                scheduleAlarmStop(settings.alarmDurationSeconds)
+                alarmHistoryRepository.record(event, "played")
             }
         }
         scope.launch {
@@ -127,11 +133,8 @@ class AlarmForegroundService : Service() {
                 val now = System.currentTimeMillis()
                 disconnectedSince = disconnectedSince ?: now
                 val downForMs = now - disconnectedSince
-                if (downForMs >= CONNECTION_LOST_THRESHOLD_MS) {
-                    NotificationManagerCompat.from(this).notify(
-                        CONNECTION_LOST_NOTIFICATION_ID,
-                        notificationFactory.connectionLost(downForMs / 60_000)
-                    )
+                if (downForMs >= CONNECTION_LOST_THRESHOLD_MS && canPostNotifications()) {
+                    postConnectionLostNotification(downForMs / 60_000)
                 }
             } else {
                 disconnectedSince = null
@@ -200,6 +203,44 @@ class AlarmForegroundService : Service() {
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
+
+    private fun canPostNotifications(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    @SuppressLint("MissingPermission")
+    private fun postConnectionLostNotification(minutes: Long) {
+        NotificationManagerCompat.from(this).notify(
+            CONNECTION_LOST_NOTIFICATION_ID,
+            notificationFactory.connectionLost(minutes)
+        )
+    }
+
+    private fun stopCurrentAlarm() {
+        alarmTimeoutJob?.cancel()
+        alarmTimeoutJob = null
+        alarmController.stop()
+    }
+
+    private fun snoozeCurrentAlarm(minutes: Int) {
+        alarmTimeoutJob?.cancel()
+        alarmTimeoutJob = null
+        alarmController.snooze(minutes)
+    }
+
+    private fun scheduleAlarmStop(durationSeconds: Int) {
+        alarmTimeoutJob?.cancel()
+        alarmTimeoutJob = if (durationSeconds > 0) {
+            scope.launch {
+                delay(durationSeconds * 1000L)
+                alarmController.stop()
+                alarmTimeoutJob = null
+            }
+        } else {
+            null
+        }
+    }
 
     companion object {
         private const val NOTIFICATION_ID = 1001

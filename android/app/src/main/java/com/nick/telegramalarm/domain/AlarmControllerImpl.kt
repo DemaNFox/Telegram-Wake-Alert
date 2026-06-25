@@ -1,17 +1,22 @@
 package com.nick.telegramalarm.domain
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
+import android.os.Build
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.nick.telegramalarm.data.model.AlarmEvent
 import com.nick.telegramalarm.notifications.NotificationFactory
 import com.nick.telegramalarm.presentation.alarm.AlarmActivity
@@ -30,17 +35,24 @@ class AlarmControllerImpl @Inject constructor(
     private var mutedUntilMillis: Long = 0
     private val handler = Handler(Looper.getMainLooper())
     private var rampRunnable: Runnable? = null
+    private var alarmActive = false
 
-    override fun trigger(event: AlarmEvent, volume: Float, soundUri: String?, volumeRampEnabled: Boolean) {
-        if (System.currentTimeMillis() < mutedUntilMillis) return
-        acquireWakeLock()
-        maximizeAlarmVolume(volume)
-        showFullScreenActivity(event)
-        NotificationManagerCompat.from(context).notify(ALARM_NOTIFICATION_ID, notificationFactory.alarm(event))
+    @Synchronized
+    override fun trigger(event: AlarmEvent, volume: Float, soundUri: String?, volumeRampEnabled: Boolean): Boolean {
+        if (alarmActive || System.currentTimeMillis() < mutedUntilMillis) return false
+        alarmActive = true
+
+        runCatching { acquireWakeLock() }
+        runCatching { maximizeAlarmVolume(volume) }
+        if (canPostNotifications()) runCatching { postAlarmNotification(event) }
+        runCatching { showFullScreenActivity(event) }
         playAlarm(volume, soundUri, volumeRampEnabled)
+        return true
     }
 
+    @Synchronized
     override fun stop() {
+        alarmActive = false
         player?.runCatching { stop() }
         player?.release()
         player = null
@@ -55,6 +67,7 @@ class AlarmControllerImpl @Inject constructor(
         snooze(1)
     }
 
+    @Synchronized
     override fun snooze(minutes: Int) {
         mutedUntilMillis = System.currentTimeMillis() + minutes.coerceAtLeast(1) * 60_000L
         stop()
@@ -113,8 +126,25 @@ class AlarmControllerImpl @Inject constructor(
     private fun showFullScreenActivity(event: AlarmEvent) {
         context.startActivity(
             AlarmActivity.intent(context, event).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_NO_USER_ACTION
+                )
             }
+        )
+    }
+
+    private fun canPostNotifications(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    @SuppressLint("MissingPermission")
+    private fun postAlarmNotification(event: AlarmEvent) {
+        NotificationManagerCompat.from(context).notify(
+            ALARM_NOTIFICATION_ID,
+            notificationFactory.alarm(event)
         )
     }
 

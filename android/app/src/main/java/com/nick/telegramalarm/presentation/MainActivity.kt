@@ -1,6 +1,7 @@
 package com.nick.telegramalarm.presentation
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -48,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,7 +64,12 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
+    private var notificationsEnabled by mutableStateOf(false)
+    private var batteryUnrestricted by mutableStateOf(false)
+    private var fullScreenAlertsAllowed by mutableStateOf(true)
+    private var overlayAllowed by mutableStateOf(false)
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        refreshSystemAccess()
         AlarmForegroundService.start(this)
     }
 
@@ -73,13 +80,22 @@ class MainActivity : ComponentActivity() {
             TelegramAlarmTheme {
                 MainApp(
                     viewModel = viewModel,
-                    notificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled(),
-                    batteryUnrestricted = isBatteryUnrestricted(),
+                    notificationsEnabled = notificationsEnabled,
+                    batteryUnrestricted = batteryUnrestricted,
+                    fullScreenAlertsAllowed = fullScreenAlertsAllowed,
+                    overlayAllowed = overlayAllowed,
                     onTestAlarm = { AlarmForegroundService.action(this, ServiceActions.TEST_ALARM) },
-                    onBatteryOptimization = { requestBatteryOptimizationIgnore() }
+                    onBatteryOptimization = { requestBatteryOptimizationIgnore() },
+                    onFullScreenAlerts = { requestFullScreenAlertAccess() },
+                    onOverlay = { requestOverlayAccess() }
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshSystemAccess()
     }
 
     private fun requestNotificationPermission() {
@@ -105,6 +121,32 @@ class MainActivity : ComponentActivity() {
 
     private fun isBatteryUnrestricted(): Boolean =
         getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+
+    private fun refreshSystemAccess() {
+        notificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
+        batteryUnrestricted = isBatteryUnrestricted()
+        fullScreenAlertsAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+            getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        overlayAllowed = Settings.canDrawOverlays(this)
+    }
+
+    private fun requestFullScreenAlertAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+            )
+        }
+    }
+
+    private fun requestOverlayAccess() {
+        startActivity(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                data = Uri.parse("package:$packageName")
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,8 +155,12 @@ private fun MainApp(
     viewModel: MainViewModel,
     notificationsEnabled: Boolean,
     batteryUnrestricted: Boolean,
+    fullScreenAlertsAllowed: Boolean,
+    overlayAllowed: Boolean,
     onTestAlarm: () -> Unit,
-    onBatteryOptimization: () -> Unit
+    onBatteryOptimization: () -> Unit,
+    onFullScreenAlerts: () -> Unit,
+    onOverlay: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
@@ -137,7 +183,17 @@ private fun MainApp(
                 Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
             }
             when (tab) {
-                0 -> MainScreen(uiState, notificationsEnabled, batteryUnrestricted, onTestAlarm, onBatteryOptimization)
+                0 -> MainScreen(
+                    uiState,
+                    notificationsEnabled,
+                    batteryUnrestricted,
+                    fullScreenAlertsAllowed,
+                    overlayAllowed,
+                    onTestAlarm,
+                    onBatteryOptimization,
+                    onFullScreenAlerts,
+                    onOverlay
+                )
                 1 -> DiagnosticsScreen(uiState, viewModel)
                 2 -> PeopleScreen(uiState, viewModel)
                 3 -> HistoryScreen(uiState, viewModel)
@@ -152,8 +208,12 @@ private fun MainScreen(
     uiState: MainUiState,
     notificationsEnabled: Boolean,
     batteryUnrestricted: Boolean,
+    fullScreenAlertsAllowed: Boolean,
+    overlayAllowed: Boolean,
     onTestAlarm: () -> Unit,
-    onBatteryOptimization: () -> Unit
+    onBatteryOptimization: () -> Unit,
+    onFullScreenAlerts: () -> Unit,
+    onOverlay: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -166,6 +226,8 @@ private fun MainScreen(
         Text(uiState.connectionStatus.name, color = Color(0xFF93C5FD), style = MaterialTheme.typography.titleLarge)
         Text("Setup checklist", style = MaterialTheme.typography.titleMedium, color = Color.White)
         DiagnosticRow("Notifications", if (notificationsEnabled) "ok" else "missing")
+        DiagnosticRow("Full-screen alerts", if (fullScreenAlertsAllowed) "ok" else "needs action")
+        DiagnosticRow("Display over other apps", if (overlayAllowed) "ok" else "needs action")
         DiagnosticRow("Battery unrestricted", if (batteryUnrestricted) "ok" else "needs action")
         DiagnosticRow("Backend token", if (uiState.settings.authToken.isNotBlank()) "ok" else "missing")
         DiagnosticRow("Backend connected", if (uiState.connectionStatus == com.nick.telegramalarm.data.model.ConnectionStatus.CONNECTED) "ok" else "no")
@@ -178,6 +240,16 @@ private fun MainScreen(
             Icon(Icons.Default.BatterySaver, null)
             Spacer(Modifier.width(8.dp))
             Text("Battery optimization")
+        }
+        if (!fullScreenAlertsAllowed) {
+            Button(onClick = onFullScreenAlerts, modifier = Modifier.fillMaxWidth()) {
+                Text("Allow full-screen alerts")
+            }
+        }
+        if (!overlayAllowed) {
+            Button(onClick = onOverlay, modifier = Modifier.fillMaxWidth()) {
+                Text("Allow display over other apps")
+            }
         }
     }
 }

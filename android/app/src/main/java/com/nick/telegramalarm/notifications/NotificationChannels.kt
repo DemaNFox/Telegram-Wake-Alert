@@ -33,6 +33,6 @@ class NotificationChannels @Inject constructor(
 
     companion object {
         const val FOREGROUND = "telegram_alarm_foreground"
-        const val ALARM = "telegram_alarm_alarm_silent_v2"
+        const val ALARM = "telegram_alarm_alarm_silent_v3"
     }
 }
