@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nick.telegramalarm.data.backend.BackendRepository
 import com.nick.telegramalarm.data.history.AlarmHistoryRepository
+import com.nick.telegramalarm.data.groups.GroupsCacheRepository
 import com.nick.telegramalarm.data.model.AlarmHistoryItem
 import com.nick.telegramalarm.data.model.AppSettings
 import com.nick.telegramalarm.data.model.BackendStatus
@@ -18,6 +19,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -43,10 +45,11 @@ class MainViewModel @Inject constructor(
     private val backendRepository: BackendRepository,
     private val alarmHistoryRepository: AlarmHistoryRepository,
     private val peopleCacheRepository: PeopleCacheRepository,
+    private val groupsCacheRepository: GroupsCacheRepository,
     webSocketClient: AlarmWebSocketClient
 ) : ViewModel() {
     private val draft = MutableStateFlow(SettingsDraft())
-    private val baseUiState = combine(
+    private val baseUiStateWithoutGroups = combine(
         settingsRepository.settings,
         webSocketClient.status,
         webSocketClient.diagnostics,
@@ -60,6 +63,9 @@ class MainViewModel @Inject constructor(
             history = history,
             recentPeople = cachedPeople
         )
+    }
+    private val baseUiState = baseUiStateWithoutGroups.combine(groupsCacheRepository.groups) { base, cachedGroups ->
+        base.copy(recentGroups = cachedGroups)
     }
 
     val uiState: StateFlow<MainUiState> = combine(
@@ -76,7 +82,7 @@ class MainViewModel @Inject constructor(
             backendStatus = draft.backendStatus,
             history = base.history,
             recentPeople = base.recentPeople,
-            recentGroups = draft.recentGroups,
+            recentGroups = base.recentGroups,
             peopleLoadResult = draft.peopleLoadResult,
             groupsLoadResult = draft.groupsLoadResult,
             backendTestResult = draft.backendTestResult
@@ -92,6 +98,12 @@ class MainViewModel @Inject constructor(
                         authToken = it.authToken ?: settings.authToken
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            val settings = settingsRepository.settings.first()
+            if (settings.authToken.isNotBlank()) {
+                loadRecentGroups(settings)
             }
         }
     }
@@ -160,11 +172,17 @@ class MainViewModel @Inject constructor(
 
     fun refreshRecentGroups() = viewModelScope.launch {
         val settings = uiState.value.settings
+        loadRecentGroups(settings)
+    }
+
+    private suspend fun loadRecentGroups(settings: AppSettings) {
         draft.update { it.copy(groupsLoadResult = "Loading groups...") }
         val result = backendRepository.fetchRecentGroups(settings.backendUrl, settings.authToken)
+        if (result.success) {
+            groupsCacheRepository.replaceGroups(result.groups)
+        }
         draft.update {
             it.copy(
-                recentGroups = if (result.success) result.groups else it.recentGroups,
                 groupsLoadResult = result.message
             )
         }
@@ -187,7 +205,6 @@ class MainViewModel @Inject constructor(
         val authToken: String? = null,
         val backendStatus: BackendStatus? = null,
         val peopleLoadResult: String? = null,
-        val recentGroups: List<TelegramGroup> = emptyList(),
         val groupsLoadResult: String? = null,
         val backendTestResult: String? = null
     )
@@ -197,7 +214,8 @@ class MainViewModel @Inject constructor(
         val connectionStatus: ConnectionStatus,
         val diagnostics: ConnectionDiagnostics,
         val history: List<AlarmHistoryItem>,
-        val recentPeople: List<TelegramPerson>
+        val recentPeople: List<TelegramPerson>,
+        val recentGroups: List<TelegramGroup> = emptyList()
     )
 
     private fun updatePeopleList(

@@ -4,6 +4,8 @@ import com.nick.telegramalarm.data.backend.BackendRepository
 import com.nick.telegramalarm.data.backend.BackendRepositoryImpl
 import com.nick.telegramalarm.data.history.AlarmHistoryRepository
 import com.nick.telegramalarm.data.history.AlarmHistoryRepositoryImpl
+import com.nick.telegramalarm.data.groups.GroupsCacheRepository
+import com.nick.telegramalarm.data.groups.GroupsCacheRepositoryImpl
 import com.nick.telegramalarm.data.people.PeopleCacheRepository
 import com.nick.telegramalarm.data.people.PeopleCacheRepositoryImpl
 import com.nick.telegramalarm.data.settings.SettingsRepository
@@ -39,6 +41,10 @@ abstract class AppModule {
     @Binds
     @Singleton
     abstract fun bindPeopleCacheRepository(impl: PeopleCacheRepositoryImpl): PeopleCacheRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGroupsCacheRepository(impl: GroupsCacheRepositoryImpl): GroupsCacheRepository
 
     @Binds
     @Singleton

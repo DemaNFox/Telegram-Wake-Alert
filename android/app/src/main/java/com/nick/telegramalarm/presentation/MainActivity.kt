@@ -350,6 +350,12 @@ private fun GroupsScreen(uiState: MainUiState, viewModel: MainViewModel) {
     val visibleGroups = remember(uiState.recentGroups, query) {
         uiState.recentGroups.filter { it.title.contains(query.trim(), ignoreCase = true) }
     }
+    val selectedGroups = remember(uiState.recentGroups, selected) {
+        selected.map { chatId ->
+            uiState.recentGroups.firstOrNull { it.chatId == chatId }
+                ?: com.nick.telegramalarm.data.model.TelegramGroup(chatId, chatId, null)
+        }.sortedBy { it.title.lowercase() }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -361,7 +367,27 @@ private fun GroupsScreen(uiState: MainUiState, viewModel: MainViewModel) {
         SwitchRow("Notify for selected groups", uiState.settings.selectedGroupsEnabled) {
             viewModel.setSelectedGroupsEnabled(it)
         }
-        Text("Selected: ${selected.size}", color = Color(0xFFCBD5E1))
+        Text("Selected groups (${selected.size})", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        if (selectedGroups.isEmpty()) {
+            Text("No groups selected", color = Color(0xFF94A3B8))
+        } else {
+            selectedGroups.forEach { group ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1E293B))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(group.title, color = Color.White, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { viewModel.removeGroup(group.chatId) }) {
+                        Text("Remove")
+                    }
+                }
+            }
+        }
         Button(onClick = { viewModel.refreshRecentGroups() }, modifier = Modifier.fillMaxWidth()) {
             Text("Load Telegram groups")
         }
