@@ -10,6 +10,7 @@ import com.nick.telegramalarm.data.model.BackendStatus
 import com.nick.telegramalarm.data.model.ConnectionDiagnostics
 import com.nick.telegramalarm.data.model.ConnectionStatus
 import com.nick.telegramalarm.data.model.TelegramPerson
+import com.nick.telegramalarm.data.model.TelegramGroup
 import com.nick.telegramalarm.data.people.PeopleCacheRepository
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.network.AlarmWebSocketClient
@@ -30,7 +31,9 @@ data class MainUiState(
     val backendStatus: BackendStatus? = null,
     val history: List<AlarmHistoryItem> = emptyList(),
     val recentPeople: List<TelegramPerson> = emptyList(),
+    val recentGroups: List<TelegramGroup> = emptyList(),
     val peopleLoadResult: String? = null,
+    val groupsLoadResult: String? = null,
     val backendTestResult: String? = null
 )
 
@@ -73,7 +76,9 @@ class MainViewModel @Inject constructor(
             backendStatus = draft.backendStatus,
             history = base.history,
             recentPeople = base.recentPeople,
+            recentGroups = draft.recentGroups,
             peopleLoadResult = draft.peopleLoadResult,
+            groupsLoadResult = draft.groupsLoadResult,
             backendTestResult = draft.backendTestResult
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
@@ -96,6 +101,7 @@ class MainViewModel @Inject constructor(
     fun setAlertPrivateBots(value: Boolean) = update { settingsRepository.updateAlertPrivateBots(value) }
     fun setAlertGroupMentions(value: Boolean) = update { settingsRepository.updateAlertGroupMentions(value) }
     fun setAlertGroupReplies(value: Boolean) = update { settingsRepository.updateAlertGroupReplies(value) }
+    fun setSelectedGroupsEnabled(value: Boolean) = update { settingsRepository.updateSelectedGroupsEnabled(value) }
     fun setVolume(value: Float) = update { settingsRepository.updateVolume(value) }
     fun setUseDefaultAlarmSound(value: Boolean) = update { settingsRepository.updateUseDefaultAlarmSound(value) }
     fun setAutoReconnect(value: Boolean) = update { settingsRepository.updateAutoReconnect(value) }
@@ -152,6 +158,21 @@ class MainViewModel @Inject constructor(
         draft.update { it.copy(peopleLoadResult = result.message) }
     }
 
+    fun refreshRecentGroups() = viewModelScope.launch {
+        val settings = uiState.value.settings
+        draft.update { it.copy(groupsLoadResult = "Loading groups...") }
+        val result = backendRepository.fetchRecentGroups(settings.backendUrl, settings.authToken)
+        draft.update {
+            it.copy(
+                recentGroups = if (result.success) result.groups else it.recentGroups,
+                groupsLoadResult = result.message
+            )
+        }
+    }
+
+    fun selectGroup(chatId: String) = updateGroupSelection(chatId, selected = true)
+    fun removeGroup(chatId: String) = updateGroupSelection(chatId, selected = false)
+
     fun allowPerson(senderId: String) = updatePeopleList(senderId, addToAllowed = true)
     fun blockPerson(senderId: String) = updatePeopleList(senderId, addToBlocked = true)
     fun removeAllowedPerson(senderId: String) = updatePeopleList(senderId, removeFromAllowed = true)
@@ -166,6 +187,8 @@ class MainViewModel @Inject constructor(
         val authToken: String? = null,
         val backendStatus: BackendStatus? = null,
         val peopleLoadResult: String? = null,
+        val recentGroups: List<TelegramGroup> = emptyList(),
+        val groupsLoadResult: String? = null,
         val backendTestResult: String? = null
     )
 
@@ -208,6 +231,14 @@ class MainViewModel @Inject constructor(
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toSet()
+
+    private fun updateGroupSelection(chatId: String, selected: Boolean) {
+        viewModelScope.launch {
+            val ids = parseSenderIds(uiState.value.settings.selectedGroupIds).toMutableSet()
+            if (selected) ids.add(chatId) else ids.remove(chatId)
+            settingsRepository.updateSelectedGroupIds(ids.joinToString(","))
+        }
+    }
 
     companion object {
         private const val DEFAULT_BACKEND_URL = "ws://10.0.2.2:8000/ws"

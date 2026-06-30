@@ -82,6 +82,14 @@ def create_app() -> FastAPI:
         telegram_listener: TelegramListenerService = app.state.telegram_listener
         return {"people": await telegram_listener.recent_people(limit)}
 
+    @app.get("/groups/recent")
+    async def recent_groups(token: str = Query(...), limit: int = Query(default=100, ge=1, le=200)) -> dict[str, object]:
+        settings = get_settings()
+        if token != settings.ws_auth_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        telegram_listener: TelegramListenerService = app.state.telegram_listener
+        return {"groups": await telegram_listener.recent_groups(limit)}
+
     return app
 
 

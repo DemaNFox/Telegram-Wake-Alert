@@ -28,6 +28,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val alertPrivateBots = booleanPreferencesKey("alert_private_bots")
         val alertGroupMentions = booleanPreferencesKey("alert_group_mentions")
         val alertGroupReplies = booleanPreferencesKey("alert_group_replies")
+        val selectedGroupsEnabled = booleanPreferencesKey("selected_groups_enabled")
+        val selectedGroupIds = stringPreferencesKey("selected_group_ids")
         val volume = floatPreferencesKey("volume")
         val useDefaultAlarmSound = booleanPreferencesKey("use_default_alarm_sound")
         val autoReconnect = booleanPreferencesKey("auto_reconnect")
@@ -63,6 +65,8 @@ class SettingsRepositoryImpl @Inject constructor(
             alertPrivateBots = prefs[Keys.alertPrivateBots] ?: false,
             alertGroupMentions = prefs[Keys.alertGroupMentions] ?: false,
             alertGroupReplies = prefs[Keys.alertGroupReplies] ?: false,
+            selectedGroupsEnabled = prefs[Keys.selectedGroupsEnabled] ?: false,
+            selectedGroupIds = prefs[Keys.selectedGroupIds] ?: "",
             volume = prefs[Keys.volume] ?: 1f,
             useDefaultAlarmSound = prefs[Keys.useDefaultAlarmSound] ?: true,
             autoReconnect = prefs[Keys.autoReconnect] ?: true,
@@ -85,6 +89,8 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateAlertPrivateBots(enabled: Boolean) = update(Keys.alertPrivateBots, enabled)
     override suspend fun updateAlertGroupMentions(enabled: Boolean) = update(Keys.alertGroupMentions, enabled)
     override suspend fun updateAlertGroupReplies(enabled: Boolean) = update(Keys.alertGroupReplies, enabled)
+    override suspend fun updateSelectedGroupsEnabled(enabled: Boolean) = update(Keys.selectedGroupsEnabled, enabled)
+    override suspend fun updateSelectedGroupIds(value: String) = update(Keys.selectedGroupIds, normalizeSenderIds(value))
     override suspend fun updateVolume(volume: Float) = update(Keys.volume, volume.coerceIn(0f, 1f))
     override suspend fun updateUseDefaultAlarmSound(enabled: Boolean) = update(Keys.useDefaultAlarmSound, enabled)
     override suspend fun updateAutoReconnect(enabled: Boolean) = update(Keys.autoReconnect, enabled)

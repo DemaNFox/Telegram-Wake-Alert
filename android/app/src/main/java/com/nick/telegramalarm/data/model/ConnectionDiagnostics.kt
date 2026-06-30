@@ -31,6 +31,18 @@ data class PeopleFetchResult(
     val success: Boolean = false
 )
 
+data class TelegramGroup(
+    val chatId: String,
+    val title: String,
+    val lastMessageAt: Long?
+)
+
+data class GroupsFetchResult(
+    val groups: List<TelegramGroup> = emptyList(),
+    val message: String,
+    val success: Boolean = false
+)
+
 data class BackendActionResult(
     val success: Boolean,
     val message: String

@@ -6,6 +6,8 @@ data class AppSettings(
     val alertPrivateBots: Boolean = false,
     val alertGroupMentions: Boolean = false,
     val alertGroupReplies: Boolean = false,
+    val selectedGroupsEnabled: Boolean = false,
+    val selectedGroupIds: String = "",
     val volume: Float = 1f,
     val useDefaultAlarmSound: Boolean = true,
     val autoReconnect: Boolean = true,

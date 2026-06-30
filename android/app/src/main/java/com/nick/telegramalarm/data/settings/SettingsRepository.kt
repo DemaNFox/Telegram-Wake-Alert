@@ -10,6 +10,8 @@ interface SettingsRepository {
     suspend fun updateAlertPrivateBots(enabled: Boolean)
     suspend fun updateAlertGroupMentions(enabled: Boolean)
     suspend fun updateAlertGroupReplies(enabled: Boolean)
+    suspend fun updateSelectedGroupsEnabled(enabled: Boolean)
+    suspend fun updateSelectedGroupIds(value: String)
     suspend fun updateVolume(volume: Float)
     suspend fun updateUseDefaultAlarmSound(enabled: Boolean)
     suspend fun updateAutoReconnect(enabled: Boolean)

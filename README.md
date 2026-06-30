@@ -1,6 +1,6 @@
 # Telegram Alarm Notifier
 
-Production-oriented two-part system for instant Android alarm alerts when a Telegram personal account receives a new private incoming message.
+Production-oriented two-part system for instant Android alarm alerts for Telegram private messages and messages in selected groups.
 
 ## Architecture
 
@@ -31,9 +31,10 @@ Authenticated endpoints use the same `WS_AUTH_TOKEN`:
 GET  /status?token=<token>
 POST /test-event?token=<token>
 GET  /people/recent?token=<token>&limit=50
+GET  /groups/recent?token=<token>&limit=100
 ```
 
-`/status` returns Telegram listener state, WebSocket client count, last heartbeat, and message counters. `/test-event` sends a synthetic alarm event to connected Android clients. `/people/recent` returns recent private Telegram users with sender ID, name, username, and last message timestamp so Android can manage local filters.
+`/status` returns Telegram listener state, WebSocket client count, last heartbeat, and message counters. `/test-event` sends a synthetic alarm event to connected Android clients. `/people/recent` returns recent private Telegram users. `/groups/recent` returns Telegram groups so Android can select them by name.
 
 ## Backend Setup
 
@@ -166,4 +167,4 @@ Backend broadcasts:
 }
 ```
 
-Only incoming private Telegram user messages received after listener startup are emitted. Groups, channels, bots, and old messages are ignored.
+Incoming private and group messages received after listener startup are emitted. The Android client applies source, people, and selected-group filters locally.

@@ -97,7 +97,7 @@ class AlarmForegroundService : Service() {
                 val settings = settingsRepository.settings.first()
                 if (!settings.alertsEnabled) return@collect
                 if (!isEventSourceEnabled(event, settings)) return@collect
-                if (!isSenderAllowed(event, settings)) return@collect
+                if (!isSelectedGroupEvent(event, settings) && !isSenderAllowed(event, settings)) return@collect
                 if (isQuietNow(settings)) return@collect
 
                 val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
@@ -190,6 +190,9 @@ class AlarmForegroundService : Service() {
     }
 
     private fun isEventSourceEnabled(event: AlarmEvent, settings: AppSettings): Boolean =
+        if (isSelectedGroupEvent(event, settings)) {
+            true
+        } else {
         when (event.reason) {
             "private_user" -> settings.alertPrivateUsers
             "private_bot" -> settings.alertPrivateBots
@@ -197,6 +200,12 @@ class AlarmForegroundService : Service() {
             "group_reply" -> settings.alertGroupReplies
             else -> false
         }
+        }
+
+    private fun isSelectedGroupEvent(event: AlarmEvent, settings: AppSettings): Boolean =
+        settings.selectedGroupsEnabled &&
+            event.reason.startsWith("group_") &&
+            event.chatId in parseSenderIds(settings.selectedGroupIds)
 
     private fun parseSenderIds(value: String): Set<String> =
         value.split(",", "\n", " ")

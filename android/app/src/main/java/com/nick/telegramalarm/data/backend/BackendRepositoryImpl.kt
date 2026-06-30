@@ -3,6 +3,8 @@ package com.nick.telegramalarm.data.backend
 import com.nick.telegramalarm.data.model.BackendActionResult
 import com.nick.telegramalarm.data.model.BackendStatus
 import com.nick.telegramalarm.data.model.PeopleFetchResult
+import com.nick.telegramalarm.data.model.GroupsFetchResult
+import com.nick.telegramalarm.data.model.TelegramGroup
 import com.nick.telegramalarm.data.model.TelegramPerson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -72,6 +74,30 @@ class BackendRepositoryImpl @Inject constructor(
                 PeopleFetchResult(people = people, message = "Loaded ${people.size} people", success = true)
             }
         }.getOrElse { PeopleFetchResult(message = "People load failed: ${it.message ?: it.javaClass.simpleName}") }
+    }
+
+    override suspend fun fetchRecentGroups(backendUrl: String, token: String): GroupsFetchResult = withContext(Dispatchers.IO) {
+        val url = httpBase(backendUrl) + "/groups/recent?token=${token.urlEncode()}&limit=100"
+        runCatching {
+            okHttpClient.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+                if (!response.isSuccessful) return@withContext GroupsFetchResult(message = "Group load failed: HTTP ${response.code}")
+                val array = JSONObject(response.body?.string().orEmpty()).optJSONArray("groups")
+                    ?: return@withContext GroupsFetchResult(message = "Group load failed: invalid response")
+                val groups = buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.optJSONObject(index) ?: continue
+                        add(
+                            TelegramGroup(
+                                chatId = item.optString("chat_id"),
+                                title = item.optString("title"),
+                                lastMessageAt = item.optLong("last_message_at").takeIf { it > 0 }
+                            )
+                        )
+                    }
+                }
+                GroupsFetchResult(groups = groups, message = "Loaded ${groups.size} groups", success = true)
+            }
+        }.getOrElse { GroupsFetchResult(message = "Group load failed: ${it.message ?: it.javaClass.simpleName}") }
     }
 
     private fun httpBase(backendUrl: String): String {

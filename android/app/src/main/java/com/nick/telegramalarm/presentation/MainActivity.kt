@@ -39,10 +39,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -175,12 +175,13 @@ private fun MainApp(
                 .background(Color(0xFF0F172A))
                 .padding(padding)
         ) {
-            TabRow(selectedTabIndex = tab) {
+            ScrollableTabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Main") }, icon = { Icon(Icons.Default.NotificationsActive, null) })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Diag") }, icon = { Icon(Icons.Default.CloudSync, null) })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("People") }, icon = { Icon(Icons.Default.People, null) })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("History") }, icon = { Icon(Icons.Default.History, null) })
-                Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Groups") }, icon = { Icon(Icons.Default.People, null) })
+                Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("History") }, icon = { Icon(Icons.Default.History, null) })
+                Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
             }
             when (tab) {
                 0 -> MainScreen(
@@ -196,7 +197,8 @@ private fun MainApp(
                 )
                 1 -> DiagnosticsScreen(uiState, viewModel)
                 2 -> PeopleScreen(uiState, viewModel)
-                3 -> HistoryScreen(uiState, viewModel)
+                3 -> GroupsScreen(uiState, viewModel)
+                4 -> HistoryScreen(uiState, viewModel)
                 else -> SettingsScreen(uiState, viewModel)
             }
         }
@@ -333,6 +335,66 @@ private fun PeopleScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     Button(onClick = { viewModel.removeBlockedPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
                         Text("Unblock")
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupsScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val selected = remember(uiState.settings.selectedGroupIds) {
+        parseSenderIds(uiState.settings.selectedGroupIds)
+    }
+    var query by remember { mutableStateOf("") }
+    val visibleGroups = remember(uiState.recentGroups, query) {
+        uiState.recentGroups.filter { it.title.contains(query.trim(), ignoreCase = true) }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Group tracking", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+        SwitchRow("Notify for selected groups", uiState.settings.selectedGroupsEnabled) {
+            viewModel.setSelectedGroupsEnabled(it)
+        }
+        Text("Selected: ${selected.size}", color = Color(0xFFCBD5E1))
+        Button(onClick = { viewModel.refreshRecentGroups() }, modifier = Modifier.fillMaxWidth()) {
+            Text("Load Telegram groups")
+        }
+        uiState.groupsLoadResult?.let { Text(it, color = Color(0xFFCBD5E1)) }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Find group by name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        visibleGroups.forEach { group ->
+            val isSelected = group.chatId in selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF111827))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(group.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Text(group.chatId, color = Color(0xFF94A3B8))
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        if (isSelected) viewModel.removeGroup(group.chatId)
+                        else viewModel.selectGroup(group.chatId)
+                    }
+                ) {
+                    Text(if (isSelected) "Remove" else "Select")
                 }
             }
         }
