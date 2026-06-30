@@ -175,7 +175,7 @@ private fun MainApp(
                 .background(Color(0xFF0F172A))
                 .padding(padding)
         ) {
-            ScrollableTabRow(selectedTabIndex = tab) {
+            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Main") }, icon = { Icon(Icons.Default.NotificationsActive, null) })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Diag") }, icon = { Icon(Icons.Default.CloudSync, null) })
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("People") }, icon = { Icon(Icons.Default.People, null) })
