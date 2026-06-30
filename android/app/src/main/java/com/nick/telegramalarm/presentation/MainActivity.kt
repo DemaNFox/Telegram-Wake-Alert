@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.CloudSync
@@ -196,9 +199,9 @@ private fun MainApp(
                     onOverlay
                 )
                 1 -> DiagnosticsScreen(uiState, viewModel)
-                2 -> PeopleScreen(uiState, viewModel)
-                3 -> GroupsScreen(uiState, viewModel)
-                4 -> HistoryScreen(uiState, viewModel)
+                2 -> PeopleLazyScreen(uiState, viewModel)
+                3 -> GroupsLazyScreen(uiState, viewModel)
+                4 -> HistoryLazyScreen(uiState, viewModel)
                 else -> SettingsScreen(uiState, viewModel)
             }
         }
@@ -451,6 +454,245 @@ private fun HistoryScreen(uiState: MainUiState, viewModel: MainViewModel) {
                 Text(item.senderName, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Text(item.message, color = Color(0xFFCBD5E1))
                 Text("${item.timestamp} · ${item.status}", color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val allowed = remember(uiState.settings.allowedSenderIds) {
+        parseSenderIds(uiState.settings.allowedSenderIds)
+    }
+    val blocked = remember(uiState.settings.blockedSenderIds) {
+        parseSenderIds(uiState.settings.blockedSenderIds)
+    }
+    val allowedPeople = remember(uiState.recentPeople, allowed) {
+        allowed.map { senderId ->
+            uiState.recentPeople.firstOrNull { it.senderId == senderId }
+                ?: com.nick.telegramalarm.data.model.TelegramPerson(senderId, senderId, null, null)
+        }.sortedBy { it.name.lowercase() }
+    }
+    val blockedPeople = remember(uiState.recentPeople, blocked) {
+        blocked.map { senderId ->
+            uiState.recentPeople.firstOrNull { it.senderId == senderId }
+                ?: com.nick.telegramalarm.data.model.TelegramPerson(senderId, senderId, null, null)
+        }.sortedBy { it.name.lowercase() }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item { Text("People filter", style = MaterialTheme.typography.headlineSmall, color = Color.White) }
+        item {
+            Text("Allowed people (${allowed.size})", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        if (allowedPeople.isEmpty()) {
+            item { Text("No explicitly allowed people", color = Color(0xFF94A3B8)) }
+        } else {
+            items(allowedPeople, key = { "allowed-${it.senderId}" }) { person ->
+                PersonSelectionRow(person.name, person.senderId, "Remove") {
+                    viewModel.removeAllowedPerson(person.senderId)
+                }
+            }
+        }
+        item {
+            Text("Blocked people (${blocked.size})", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        if (blockedPeople.isEmpty()) {
+            item { Text("No blocked people", color = Color(0xFF94A3B8)) }
+        } else {
+            items(blockedPeople, key = { "blocked-${it.senderId}" }) { person ->
+                PersonSelectionRow(person.name, person.senderId, "Unblock") {
+                    viewModel.removeBlockedPerson(person.senderId)
+                }
+            }
+        }
+        item {
+            Button(onClick = { viewModel.refreshRecentPeople() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Load recent Telegram people")
+            }
+        }
+        uiState.peopleLoadResult?.let { result ->
+            item { Text(result, color = Color(0xFFCBD5E1)) }
+        }
+        item {
+            Text("Telegram people", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        items(uiState.recentPeople, key = { it.senderId }) { person ->
+            val state = when (person.senderId) {
+                in blocked -> "blocked"
+                in allowed -> "allowed"
+                else -> "default"
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF111827))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(person.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text("@${person.username ?: "-"} · ${person.senderId} · $state", color = Color(0xFF94A3B8))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { viewModel.allowPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
+                        Text("Allow")
+                    }
+                    Button(onClick = { viewModel.blockPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
+                        Text("Block")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonSelectionRow(name: String, senderId: String, action: String, onAction: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1E293B))
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(name, color = Color.White)
+            if (name != senderId) Text(senderId, color = Color(0xFF94A3B8))
+        }
+        Spacer(Modifier.width(8.dp))
+        Button(onClick = onAction) { Text(action) }
+    }
+}
+
+@Composable
+private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val selected = remember(uiState.settings.selectedGroupIds) {
+        parseSenderIds(uiState.settings.selectedGroupIds)
+    }
+    var query by remember { mutableStateOf("") }
+    val visibleGroups = remember(uiState.recentGroups, query) {
+        uiState.recentGroups.filter { it.title.contains(query.trim(), ignoreCase = true) }
+    }
+    val selectedGroups = remember(uiState.recentGroups, selected) {
+        selected.map { chatId ->
+            uiState.recentGroups.firstOrNull { it.chatId == chatId }
+                ?: com.nick.telegramalarm.data.model.TelegramGroup(chatId, chatId, null)
+        }.sortedBy { it.title.lowercase() }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item { Text("Group tracking", style = MaterialTheme.typography.headlineSmall, color = Color.White) }
+        item {
+            SwitchRow("Notify for selected groups", uiState.settings.selectedGroupsEnabled) {
+                viewModel.setSelectedGroupsEnabled(it)
+            }
+        }
+        item {
+            Text("Selected groups (${selected.size})", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        if (selectedGroups.isEmpty()) {
+            item { Text("No groups selected", color = Color(0xFF94A3B8)) }
+        } else {
+            items(selectedGroups, key = { "selected-${it.chatId}" }) { group ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1E293B))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(group.title, color = Color.White, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { viewModel.removeGroup(group.chatId) }) { Text("Remove") }
+                }
+            }
+        }
+        item {
+            Button(onClick = { viewModel.refreshRecentGroups() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Load Telegram groups")
+            }
+        }
+        uiState.groupsLoadResult?.let { result ->
+            item { Text(result, color = Color(0xFFCBD5E1)) }
+        }
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("Find group by name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+        }
+        items(visibleGroups, key = { it.chatId }) { group ->
+            val isSelected = group.chatId in selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF111827))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(group.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Text(group.chatId, color = Color(0xFF94A3B8))
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        if (isSelected) viewModel.removeGroup(group.chatId)
+                        else viewModel.selectGroup(group.chatId)
+                    }
+                ) {
+                    Text(if (isSelected) "Remove" else "Select")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Alarm history", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                Button(onClick = { viewModel.clearHistory() }) { Text("Clear") }
+            }
+        }
+        items(uiState.history) { historyItem ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF111827))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(historyItem.senderName, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text(historyItem.message, color = Color(0xFFCBD5E1))
+                Text(
+                    "${historyItem.timestamp} · ${historyItem.status}",
+                    color = Color(0xFF94A3B8),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }
