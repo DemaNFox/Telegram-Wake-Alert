@@ -21,5 +21,9 @@ data class AppSettings(
     val alarmDurationSeconds: Int = 0,
     val volumeRampEnabled: Boolean = false,
     val allowedSenderIds: String = "",
-    val blockedSenderIds: String = ""
+    val blockedSenderIds: String = "",
+    val blockedChatIds: String = "",
+    val pushInstallationId: String = "",
+    val pushRegistered: Boolean = false,
+    val pushRegistrationMessage: String = "Firebase is not configured"
 )

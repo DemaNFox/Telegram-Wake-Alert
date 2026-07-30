@@ -4,8 +4,8 @@ Production-oriented two-part system for instant Android alarm alerts for Telegra
 
 ## Architecture
 
-- `backend/`: Python 3.12, FastAPI, Telethon MTProto user session, WebSocket fanout, token auth, heartbeat, reconnect loop, graceful shutdown.
-- `android/`: Native Kotlin app, Jetpack Compose, Hilt, MVVM, DataStore, OkHttp WebSocket, foreground sticky service, boot receiver, full-screen alarm activity, WakeLock, alarm audio stream.
+- `backend/`: Python 3.12, FastAPI, Telethon MTProto user session, Firebase Cloud Messaging, WebSocket fallback, token auth, heartbeat, reconnect loop, graceful shutdown.
+- `android/`: Native Kotlin app, Jetpack Compose, Hilt, MVVM, DataStore, Firebase Messaging, OkHttp WebSocket fallback, foreground alarm service, full-screen alarm activity, WakeLock, alarm audio stream.
 
 The backend uses MTProto user login only. It does not use Telegram Bot API.
 
@@ -30,11 +30,49 @@ Authenticated endpoints use the same `WS_AUTH_TOKEN`:
 ```text
 GET  /status?token=<token>
 POST /test-event?token=<token>
+POST /push/register?token=<token>
 GET  /people/recent?token=<token>&limit=50
 GET  /groups/recent?token=<token>&limit=100
 ```
 
 `/status` returns Telegram listener state, WebSocket client count, last heartbeat, and message counters. `/test-event` sends a synthetic alarm event to connected Android clients. `/people/recent` returns recent private Telegram users. `/groups/recent` returns Telegram groups so Android can select them by name.
+
+`/test-event` is delivered through both FCM and WebSocket. The Android client deduplicates the event and plays it only once.
+
+## Firebase Push Setup
+
+Publishing the app in Google Play is not required.
+
+1. Create a Firebase project and enable Firebase Cloud Messaging.
+2. Add an Android app with package name `com.nick.telegramalarm`.
+3. For debug APK builds, also add `com.nick.telegramalarm.debug`.
+4. Download `google-services.json` and place it at:
+
+```text
+android/app/google-services.json
+```
+
+The Google Services Gradle plugin is applied only when this file exists, so the project still compiles before Firebase is configured.
+
+5. In Firebase/Google Cloud, create a service account with permission to send FCM messages and download its JSON key.
+6. Store the key outside Git. For the provided Docker setup, use:
+
+```text
+backend/firebase-service-account.json
+```
+
+7. The credentials volume is already declared in `backend/docker-compose.yml`. Configure:
+
+```dotenv
+FIREBASE_ENABLED=true
+FIREBASE_CREDENTIALS_PATH=firebase-service-account.json
+FIREBASE_PROJECT_ID=your-firebase-project-id
+FIREBASE_INSTALLATION_STORE_PATH=data/fcm_installations.json
+```
+
+8. Rebuild/restart the backend, install the newly built APK, save the backend URL/auth token in the app, and press `Register push delivery` in Settings.
+
+`Main` must show `Push delivery: registered`. Backend `/status` must show Firebase enabled and at least one registered device.
 
 ## Backend Setup
 
@@ -89,6 +127,7 @@ In the app settings screen:
 - Auth token: same value as `WS_AUTH_TOKEN`
 - Enable alerts: on
 - Auto reconnect: on
+- Push delivery: registered
 
 For emulator against local backend use:
 
@@ -107,7 +146,7 @@ Grant these runtime/system permissions or settings where Android asks:
 - Battery optimization exemption
 - Autostart/background execution permissions on OEM Android builds where available
 
-The foreground service shows `Telegram Alarm Bot Active`, reconnects WebSocket automatically, restarts after process death via `START_STICKY`, and starts after reboot through `BOOT_COMPLETED`.
+FCM high-priority data messages are the primary delivery channel and can start the alarm flow when the application process is absent. The foreground `remoteMessaging` service and WebSocket remain as a fallback. Events carry a stable `event_id`, so receiving the same event through both transports does not play the alarm twice.
 
 The app now includes:
 

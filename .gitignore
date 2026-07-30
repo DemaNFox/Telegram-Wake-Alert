@@ -9,6 +9,8 @@ backend/sessions/
 *.session
 *.session-journal
 backend/.pytest_cache/
+backend/data/
+backend/firebase-service-account*.json
 android/.gradle/
 android/.kotlin/
 android/gradle/gradle-daemon-jvm.properties
@@ -16,6 +18,7 @@ android/build/
 android/app/build/
 android/local.properties
 android/captures/
+android/app/google-services.json
 .idea/
 *.iml
 *.apk

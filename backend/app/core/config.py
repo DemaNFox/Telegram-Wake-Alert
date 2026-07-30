@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     heartbeat_interval_seconds: int = Field(default=20, alias="HEARTBEAT_INTERVAL_SECONDS")
     telegram_reconnect_min_seconds: int = Field(default=2, alias="TELEGRAM_RECONNECT_MIN_SECONDS")
     telegram_reconnect_max_seconds: int = Field(default=60, alias="TELEGRAM_RECONNECT_MAX_SECONDS")
+    firebase_enabled: bool = Field(default=False, alias="FIREBASE_ENABLED")
+    firebase_credentials_path: str | None = Field(default=None, alias="FIREBASE_CREDENTIALS_PATH")
+    firebase_project_id: str | None = Field(default=None, alias="FIREBASE_PROJECT_ID")
+    firebase_installation_store_path: str = Field(
+        default="data/fcm_installations.json",
+        alias="FIREBASE_INSTALLATION_STORE_PATH",
+    )
 
 
 @lru_cache

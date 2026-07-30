@@ -43,6 +43,10 @@ class SettingsRepositoryImpl @Inject constructor(
         val volumeRampEnabled = booleanPreferencesKey("volume_ramp_enabled")
         val allowedSenderIds = stringPreferencesKey("allowed_sender_ids")
         val blockedSenderIds = stringPreferencesKey("blocked_sender_ids")
+        val blockedChatIds = stringPreferencesKey("blocked_chat_ids")
+        val pushInstallationId = stringPreferencesKey("push_installation_id")
+        val pushRegistered = booleanPreferencesKey("push_registered")
+        val pushRegistrationMessage = stringPreferencesKey("push_registration_message")
     }
 
     private val securePrefs by lazy {
@@ -80,7 +84,11 @@ class SettingsRepositoryImpl @Inject constructor(
             alarmDurationSeconds = prefs[Keys.alarmDurationSeconds] ?: 0,
             volumeRampEnabled = prefs[Keys.volumeRampEnabled] ?: false,
             allowedSenderIds = prefs[Keys.allowedSenderIds] ?: "",
-            blockedSenderIds = prefs[Keys.blockedSenderIds] ?: ""
+            blockedSenderIds = prefs[Keys.blockedSenderIds] ?: "",
+            blockedChatIds = prefs[Keys.blockedChatIds] ?: "",
+            pushInstallationId = prefs[Keys.pushInstallationId] ?: "",
+            pushRegistered = prefs[Keys.pushRegistered] ?: false,
+            pushRegistrationMessage = prefs[Keys.pushRegistrationMessage] ?: "Firebase is not configured"
         )
     }
 
@@ -108,6 +116,18 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateVolumeRampEnabled(enabled: Boolean) = update(Keys.volumeRampEnabled, enabled)
     override suspend fun updateAllowedSenderIds(value: String) = update(Keys.allowedSenderIds, normalizeSenderIds(value))
     override suspend fun updateBlockedSenderIds(value: String) = update(Keys.blockedSenderIds, normalizeSenderIds(value))
+    override suspend fun updateBlockedChatIds(value: String) = update(Keys.blockedChatIds, normalizeSenderIds(value))
+    override suspend fun updatePushRegistration(
+        installationId: String,
+        registered: Boolean,
+        message: String
+    ) {
+        context.dataStore.edit {
+            it[Keys.pushInstallationId] = installationId.trim()
+            it[Keys.pushRegistered] = registered
+            it[Keys.pushRegistrationMessage] = message
+        }
+    }
 
     private suspend fun <T> update(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
         context.dataStore.edit { it[key] = value }

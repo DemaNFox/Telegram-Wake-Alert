@@ -26,4 +26,6 @@ interface SettingsRepository {
     suspend fun updateVolumeRampEnabled(enabled: Boolean)
     suspend fun updateAllowedSenderIds(value: String)
     suspend fun updateBlockedSenderIds(value: String)
+    suspend fun updateBlockedChatIds(value: String)
+    suspend fun updatePushRegistration(installationId: String, registered: Boolean, message: String)
 }

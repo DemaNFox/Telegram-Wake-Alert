@@ -15,6 +15,7 @@ import com.nick.telegramalarm.data.model.TelegramGroup
 import com.nick.telegramalarm.data.people.PeopleCacheRepository
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.network.AlarmWebSocketClient
+import com.nick.telegramalarm.push.PushRegistrationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,7 @@ class MainViewModel @Inject constructor(
     private val alarmHistoryRepository: AlarmHistoryRepository,
     private val peopleCacheRepository: PeopleCacheRepository,
     private val groupsCacheRepository: GroupsCacheRepository,
+    private val pushRegistrationManager: PushRegistrationManager,
     webSocketClient: AlarmWebSocketClient
 ) : ViewModel() {
     private val draft = MutableStateFlow(SettingsDraft())
@@ -137,6 +139,7 @@ class MainViewModel @Inject constructor(
         val state = uiState.value
         settingsRepository.updateBackendUrl(state.settings.backendUrl)
         settingsRepository.updateAuthToken(state.settings.authToken)
+        pushRegistrationManager.refresh()
     }
 
     fun setQuietHoursStart(value: String) = update { settingsRepository.updateQuietHoursStart(value) }
@@ -144,6 +147,7 @@ class MainViewModel @Inject constructor(
     fun setCustomAlarmSoundUri(value: String) = update { settingsRepository.updateCustomAlarmSoundUri(value) }
     fun setAllowedSenderIds(value: String) = update { settingsRepository.updateAllowedSenderIds(value) }
     fun setBlockedSenderIds(value: String) = update { settingsRepository.updateBlockedSenderIds(value) }
+    fun refreshPushRegistration() = pushRegistrationManager.refresh()
 
     fun refreshBackendStatus() = viewModelScope.launch {
         val settings = uiState.value.settings
@@ -195,6 +199,8 @@ class MainViewModel @Inject constructor(
     fun blockPerson(senderId: String) = updatePeopleList(senderId, addToBlocked = true)
     fun removeAllowedPerson(senderId: String) = updatePeopleList(senderId, removeFromAllowed = true)
     fun removeBlockedPerson(senderId: String) = updatePeopleList(senderId, removeFromBlocked = true)
+    fun blockChat(chatId: String) = updateBlockedChats(chatId, blocked = true)
+    fun unblockChat(chatId: String) = updateBlockedChats(chatId, blocked = false)
 
     private fun update(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
@@ -255,6 +261,15 @@ class MainViewModel @Inject constructor(
             val ids = parseSenderIds(uiState.value.settings.selectedGroupIds).toMutableSet()
             if (selected) ids.add(chatId) else ids.remove(chatId)
             settingsRepository.updateSelectedGroupIds(ids.joinToString(","))
+        }
+    }
+
+    private fun updateBlockedChats(chatId: String, blocked: Boolean) {
+        if (chatId.isBlank()) return
+        viewModelScope.launch {
+            val ids = parseSenderIds(uiState.value.settings.blockedChatIds).toMutableSet()
+            if (blocked) ids.add(chatId) else ids.remove(chatId)
+            settingsRepository.updateBlockedChatIds(ids.joinToString(","))
         }
     }
 

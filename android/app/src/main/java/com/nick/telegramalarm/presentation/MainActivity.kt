@@ -14,8 +14,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,7 +40,12 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -58,11 +66,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.nick.telegramalarm.service.AlarmForegroundService
 import com.nick.telegramalarm.service.ServiceActions
 import com.nick.telegramalarm.ui.theme.TelegramAlarmTheme
 import dagger.hilt.android.AndroidEntryPoint
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -189,6 +203,7 @@ private fun MainApp(
             when (tab) {
                 0 -> MainScreen(
                     uiState,
+                    viewModel,
                     notificationsEnabled,
                     batteryUnrestricted,
                     fullScreenAlertsAllowed,
@@ -211,6 +226,7 @@ private fun MainApp(
 @Composable
 private fun MainScreen(
     uiState: MainUiState,
+    viewModel: MainViewModel,
     notificationsEnabled: Boolean,
     batteryUnrestricted: Boolean,
     fullScreenAlertsAllowed: Boolean,
@@ -227,6 +243,10 @@ private fun MainScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+        AlertsMasterCard(
+            enabled = uiState.settings.alertsEnabled,
+            onEnabledChange = viewModel::setAlertsEnabled
+        )
         Text("Connection", style = MaterialTheme.typography.headlineSmall, color = Color.White)
         Text(uiState.connectionStatus.name, color = Color(0xFF93C5FD), style = MaterialTheme.typography.titleLarge)
         Text("Setup checklist", style = MaterialTheme.typography.titleMedium, color = Color.White)
@@ -235,6 +255,7 @@ private fun MainScreen(
         DiagnosticRow("Display over other apps", if (overlayAllowed) "ok" else "needs action")
         DiagnosticRow("Battery unrestricted", if (batteryUnrestricted) "ok" else "needs action")
         DiagnosticRow("Backend token", if (uiState.settings.authToken.isNotBlank()) "ok" else "missing")
+        DiagnosticRow("Push delivery", if (uiState.settings.pushRegistered) "registered" else "not registered")
         DiagnosticRow("Backend connected", if (uiState.connectionStatus == com.nick.telegramalarm.data.model.ConnectionStatus.CONNECTED) "ok" else "no")
         Button(onClick = onTestAlarm, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.PlayArrow, null)
@@ -255,6 +276,50 @@ private fun MainScreen(
             Button(onClick = onOverlay, modifier = Modifier.fillMaxWidth()) {
                 Text("Allow display over other apps")
             }
+        }
+    }
+}
+
+@Composable
+private fun AlertsMasterCard(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = if (enabled) Color(0xFF22C55E) else Color(0xFF64748B),
+                shape = RoundedCornerShape(16.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) Color(0xFF143524) else Color(0xFF1E293B)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "Alerts",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (enabled) "Incoming Telegram alerts are enabled" else "All incoming alerts are paused",
+                    color = Color(0xFFCBD5E1),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Switch(checked = enabled, onCheckedChange = onEnabledChange)
         }
     }
 }
@@ -282,6 +347,8 @@ private fun DiagnosticsScreen(uiState: MainUiState, viewModel: MainViewModel) {
             DiagnosticRow("Backend reachable", status.reachable.toString())
             DiagnosticRow("Telegram connected", status.telegramConnected?.toString() ?: "-")
             DiagnosticRow("WS clients", status.websocketClients?.toString() ?: "-")
+            DiagnosticRow("Firebase push", status.pushEnabled?.toString() ?: "-")
+            DiagnosticRow("Push devices", status.pushRegisteredDevices?.toString() ?: "-")
             DiagnosticRow("Backend error", status.error ?: "-")
         }
         Button(onClick = { viewModel.sendBackendTest() }, modifier = Modifier.fillMaxWidth()) {
@@ -663,10 +730,13 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
 
 @Composable
 private fun HistoryLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val blockedChats = remember(uiState.settings.blockedChatIds) {
+        parseSenderIds(uiState.settings.blockedChatIds)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Row(
@@ -678,25 +748,116 @@ private fun HistoryLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                 Button(onClick = { viewModel.clearHistory() }) { Text("Clear") }
             }
         }
+        item {
+            Text(
+                "Press and hold a message to block notifications from its chat. Blocked chats: ${blockedChats.size}",
+                color = Color(0xFF94A3B8),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
         items(uiState.history) { historyItem ->
+            HistoryItemCard(
+                item = historyItem,
+                isBlocked = historyItem.chatId in blockedChats,
+                onBlockChat = { viewModel.blockChat(historyItem.chatId) },
+                onUnblockChat = { viewModel.unblockChat(historyItem.chatId) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HistoryItemCard(
+    item: com.nick.telegramalarm.data.model.AlarmHistoryItem,
+    isBlocked: Boolean,
+    onBlockChat: () -> Unit,
+    onUnblockChat: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 1.dp,
+                    color = if (isBlocked) Color(0xFFEF4444) else Color(0xFF334155),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .pointerInput(item.chatId, isBlocked) {
+                    detectTapGestures(onLongPress = { menuExpanded = true })
+                },
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+            shape = RoundedCornerShape(14.dp)
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF111827))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(historyItem.senderName, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                Text(historyItem.message, color = Color(0xFFCBD5E1))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            item.senderName,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        item.chatTitle?.takeIf { it.isNotBlank() }?.let { title ->
+                            Text(title, color = Color(0xFF93C5FD), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Text(
+                        if (isBlocked) "BLOCKED" else item.status.uppercase(),
+                        color = if (isBlocked) Color(0xFFFCA5A5) else Color(0xFF86EFAC),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                HorizontalDivider(color = Color(0xFF334155))
+                Text(item.message, color = Color(0xFFE2E8F0), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "${historyItem.timestamp} · ${historyItem.status}",
+                    formatHistoryTimestamp(item.timestamp),
                     color = Color(0xFF94A3B8),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
         }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        when {
+                            item.chatId.isBlank() -> "Chat unavailable for this older entry"
+                            isBlocked -> "Unblock this chat"
+                            else -> "Block this chat"
+                        }
+                    )
+                },
+                enabled = item.chatId.isNotBlank(),
+                onClick = {
+                    if (isBlocked) onUnblockChat() else onBlockChat()
+                    menuExpanded = false
+                }
+            )
+        }
     }
 }
+
+private fun formatHistoryTimestamp(timestamp: Long): String {
+    val milliseconds = if (timestamp < 10_000_000_000L) timestamp * 1_000 else timestamp
+    return runCatching {
+        HISTORY_TIME_FORMATTER.format(Instant.ofEpochMilli(milliseconds))
+    }.getOrDefault(timestamp.toString())
+}
+
+private val HISTORY_TIME_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm")
+        .withZone(ZoneId.systemDefault())
 
 private fun parseSenderIds(value: String): Set<String> =
     value.split(",", "\n", " ")
@@ -714,6 +875,9 @@ private fun DiagnosticRow(label: String, value: String) {
 
 @Composable
 private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val blockedChats = remember(uiState.settings.blockedChatIds) {
+        parseSenderIds(uiState.settings.blockedChatIds)
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -721,12 +885,42 @@ private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SwitchRow("Enable alerts", uiState.settings.alertsEnabled) { viewModel.setAlertsEnabled(it) }
         Text("Alert sources", color = Color.White, style = MaterialTheme.typography.titleMedium)
         SwitchRow("Private users", uiState.settings.alertPrivateUsers) { viewModel.setAlertPrivateUsers(it) }
         SwitchRow("Private bots", uiState.settings.alertPrivateBots) { viewModel.setAlertPrivateBots(it) }
         SwitchRow("Group mentions", uiState.settings.alertGroupMentions) { viewModel.setAlertGroupMentions(it) }
         SwitchRow("Group replies", uiState.settings.alertGroupReplies) { viewModel.setAlertGroupReplies(it) }
+        Text(
+            "Blocked chats (${blockedChats.size})",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium
+        )
+        if (blockedChats.isEmpty()) {
+            Text("No blocked chats", color = Color(0xFF94A3B8))
+        } else {
+            blockedChats.forEach { chatId ->
+                val chatName = uiState.history
+                    .firstOrNull { it.chatId == chatId }
+                    ?.chatTitle
+                    ?.takeIf { it.isNotBlank() }
+                    ?: chatId
+                PersonSelectionRow(chatName, chatId, "Unblock") {
+                    viewModel.unblockChat(chatId)
+                }
+            }
+        }
+        Text("Push delivery", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        DiagnosticRow(
+            "Registration",
+            if (uiState.settings.pushRegistered) "registered" else "not registered"
+        )
+        Text(uiState.settings.pushRegistrationMessage, color = Color(0xFF94A3B8))
+        Button(
+            onClick = viewModel::refreshPushRegistration,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Register push delivery")
+        }
         SwitchRow("Auto reconnect", uiState.settings.autoReconnect) { viewModel.setAutoReconnect(it) }
         SwitchRow("Use default alarm sound", uiState.settings.useDefaultAlarmSound) { viewModel.setUseDefaultAlarmSound(it) }
         SwitchRow("Gradual volume ramp", uiState.settings.volumeRampEnabled) { viewModel.setVolumeRampEnabled(it) }

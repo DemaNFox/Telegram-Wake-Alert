@@ -15,6 +15,8 @@ data class BackendStatus(
     val websocketClients: Int? = null,
     val telegramConnected: Boolean? = null,
     val lastTelegramMessageAt: Long? = null,
+    val pushEnabled: Boolean? = null,
+    val pushRegisteredDevices: Int? = null,
     val error: String? = null
 )
 

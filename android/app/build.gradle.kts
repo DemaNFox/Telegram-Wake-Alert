@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.nick.telegramalarm"
     compileSdk = 36
@@ -75,6 +79,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.security.crypto)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+    implementation(libs.firebase.installations)
     ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

@@ -10,4 +10,10 @@ interface BackendRepository {
     suspend fun sendTestEvent(backendUrl: String, token: String): BackendActionResult
     suspend fun fetchRecentPeople(backendUrl: String, token: String): PeopleFetchResult
     suspend fun fetchRecentGroups(backendUrl: String, token: String): GroupsFetchResult
+    suspend fun registerPushInstallation(
+        backendUrl: String,
+        authToken: String,
+        installationId: String,
+        previousInstallationId: String?
+    ): BackendActionResult
 }

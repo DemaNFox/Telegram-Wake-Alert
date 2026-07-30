@@ -4,10 +4,12 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.nick.telegramalarm.data.model.AlarmEvent
 import com.nick.telegramalarm.data.model.AppSettings
@@ -44,10 +46,13 @@ class AlarmForegroundService : Service() {
     private val clientId = UUID.randomUUID().toString()
     private var started = false
     private var alarmTimeoutJob: Job? = null
+    private var alarmActive = false
+    private var currentConnectionStatus = ConnectionStatus.DISCONNECTED
+    private val recentEventIds = linkedMapOf<String, Long>()
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, notificationFactory.foreground("Starting"))
+        promoteRemoteMessaging("Starting")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -59,9 +64,15 @@ class AlarmForegroundService : Service() {
             ServiceActions.TEST_ALARM -> scope.launch {
                 val settings = settingsRepository.settings.first()
                 val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
-                if (alarmController.trigger(testEvent(), settings.volume, soundUri, settings.volumeRampEnabled)) {
+                val event = testEvent()
+                if (alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)) {
+                    alarmActive = true
+                    promoteAlarm(event)
                     scheduleAlarmStop(settings.alarmDurationSeconds)
                 }
+            }
+            ServiceActions.PUSH_ALARM -> intent.toAlarmEvent()?.let { event ->
+                scope.launch { handleIncomingEvent(event, "played_push") }
             }
             else -> startCollectorsOnce()
         }
@@ -71,7 +82,7 @@ class AlarmForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        stopCurrentAlarm()
+        stopCurrentAlarm(updateForeground = false)
         webSocketClient.disconnect()
         scope.cancel()
         super.onDestroy()
@@ -94,23 +105,15 @@ class AlarmForegroundService : Service() {
         }
         scope.launch {
             webSocketClient.events.collect { event ->
-                val settings = settingsRepository.settings.first()
-                if (!settings.alertsEnabled) return@collect
-                if (!isEventSourceEnabled(event, settings)) return@collect
-                if (!isSelectedGroupEvent(event, settings) && !isSenderAllowed(event, settings)) return@collect
-                if (isQuietNow(settings)) return@collect
-
-                val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
-                if (!alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)) {
-                    return@collect
-                }
-                scheduleAlarmStop(settings.alarmDurationSeconds)
-                alarmHistoryRepository.record(event, "played")
+                handleIncomingEvent(event, "played_websocket")
             }
         }
         scope.launch {
             webSocketClient.status.collect { status ->
-                startForeground(NOTIFICATION_ID, notificationFactory.foreground(status.name.lowercase()))
+                currentConnectionStatus = status
+                if (!alarmActive) {
+                    promoteRemoteMessaging(status.name.lowercase())
+                }
                 if (status == ConnectionStatus.CONNECTED) {
                     NotificationManagerCompat.from(this@AlarmForegroundService).cancel(CONNECTION_LOST_NOTIFICATION_ID)
                 }
@@ -189,6 +192,38 @@ class AlarmForegroundService : Service() {
         return allowed.isEmpty() || senderId in allowed
     }
 
+    private suspend fun handleIncomingEvent(event: AlarmEvent, historyStatus: String) {
+        val settings = settingsRepository.settings.first()
+        if (!settings.alertsEnabled) return
+        if (isChatBlocked(event, settings)) return
+        if (!isEventSourceEnabled(event, settings)) return
+        if (!isSelectedGroupEvent(event, settings) && !isSenderAllowed(event, settings)) return
+        if (isQuietNow(settings)) return
+        if (isDuplicate(event)) return
+
+        val soundUri = if (settings.useDefaultAlarmSound) null else settings.customAlarmSoundUri
+        if (!alarmController.trigger(event, settings.volume, soundUri, settings.volumeRampEnabled)) return
+        alarmActive = true
+        promoteAlarm(event)
+        scheduleAlarmStop(settings.alarmDurationSeconds)
+        alarmHistoryRepository.record(event, historyStatus)
+    }
+
+    private fun isDuplicate(event: AlarmEvent): Boolean {
+        val now = System.currentTimeMillis()
+        recentEventIds.entries.removeAll { now - it.value > EVENT_DEDUPLICATION_WINDOW_MS }
+        val key = event.eventId.ifBlank {
+            listOf(event.chatId, event.senderId, event.timestamp.toString(), event.message)
+                .joinToString("\u0000")
+        }
+        if (key in recentEventIds) return true
+        recentEventIds[key] = now
+        return false
+    }
+
+    private fun isChatBlocked(event: AlarmEvent, settings: AppSettings): Boolean =
+        event.chatId.trim() in parseSenderIds(settings.blockedChatIds)
+
     private fun isEventSourceEnabled(event: AlarmEvent, settings: AppSettings): Boolean =
         if (isSelectedGroupEvent(event, settings)) {
             true
@@ -226,16 +261,22 @@ class AlarmForegroundService : Service() {
         )
     }
 
-    private fun stopCurrentAlarm() {
+    private fun stopCurrentAlarm(updateForeground: Boolean = true) {
         alarmTimeoutJob?.cancel()
         alarmTimeoutJob = null
+        alarmActive = false
         alarmController.stop()
+        if (updateForeground) {
+            promoteRemoteMessaging(currentConnectionStatus.name.lowercase())
+        }
     }
 
     private fun snoozeCurrentAlarm(minutes: Int) {
         alarmTimeoutJob?.cancel()
         alarmTimeoutJob = null
+        alarmActive = false
         alarmController.snooze(minutes)
+        promoteRemoteMessaging(currentConnectionStatus.name.lowercase())
     }
 
     private fun scheduleAlarmStop(durationSeconds: Int) {
@@ -245,6 +286,8 @@ class AlarmForegroundService : Service() {
                 delay(durationSeconds * 1000L)
                 alarmController.stop()
                 alarmTimeoutJob = null
+                alarmActive = false
+                promoteRemoteMessaging(currentConnectionStatus.name.lowercase())
             }
         } else {
             null
@@ -255,6 +298,15 @@ class AlarmForegroundService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val CONNECTION_LOST_NOTIFICATION_ID = 1002
         private const val CONNECTION_LOST_THRESHOLD_MS = 60_000L
+        private const val EVENT_DEDUPLICATION_WINDOW_MS = 5 * 60_000L
+        private const val EXTRA_EVENT_ID = "event_id"
+        private const val EXTRA_CHAT_ID = "chat_id"
+        private const val EXTRA_SENDER_ID = "sender_id"
+        private const val EXTRA_SENDER_NAME = "sender_name"
+        private const val EXTRA_MESSAGE = "message"
+        private const val EXTRA_TIMESTAMP = "timestamp"
+        private const val EXTRA_CHAT_TITLE = "chat_title"
+        private const val EXTRA_REASON = "reason"
 
         fun start(context: android.content.Context) {
             val intent = Intent(context, AlarmForegroundService::class.java).setAction(ServiceActions.START)
@@ -265,6 +317,64 @@ class AlarmForegroundService : Service() {
             val intent = Intent(context, AlarmForegroundService::class.java).setAction(action)
             ContextCompat.startForegroundService(context, intent)
         }
+
+        fun pushAlarm(context: android.content.Context, event: AlarmEvent) {
+            val intent = Intent(context, AlarmForegroundService::class.java)
+                .setAction(ServiceActions.PUSH_ALARM)
+                .putExtra(EXTRA_EVENT_ID, event.eventId)
+                .putExtra(EXTRA_CHAT_ID, event.chatId)
+                .putExtra(EXTRA_SENDER_ID, event.senderId)
+                .putExtra(EXTRA_SENDER_NAME, event.senderName)
+                .putExtra(EXTRA_MESSAGE, event.message)
+                .putExtra(EXTRA_TIMESTAMP, event.timestamp)
+                .putExtra(EXTRA_CHAT_TITLE, event.chatTitle)
+                .putExtra(EXTRA_REASON, event.reason)
+            ContextCompat.startForegroundService(context, intent)
+        }
+    }
+
+    private fun promoteRemoteMessaging(status: String) {
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            notificationFactory.foreground(status),
+            serviceType
+        )
+    }
+
+    private fun promoteAlarm(event: AlarmEvent) {
+        val remoteMessagingType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            notificationFactory.foreground("Alarm: ${event.senderName}"),
+            remoteMessagingType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+        )
+    }
+
+    private fun Intent.toAlarmEvent(): AlarmEvent? {
+        val chatId = getStringExtra(EXTRA_CHAT_ID).orEmpty()
+        val senderId = getStringExtra(EXTRA_SENDER_ID).orEmpty()
+        if (chatId.isBlank() || senderId.isBlank()) return null
+        return AlarmEvent(
+            chatId = chatId,
+            senderId = senderId,
+            senderName = getStringExtra(EXTRA_SENDER_NAME).orEmpty(),
+            message = getStringExtra(EXTRA_MESSAGE).orEmpty(),
+            timestamp = getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis() / 1_000),
+            chatTitle = getStringExtra(EXTRA_CHAT_TITLE)?.takeIf { it.isNotBlank() },
+            reason = getStringExtra(EXTRA_REASON).orEmpty().ifBlank { "private_user" },
+            eventId = getStringExtra(EXTRA_EVENT_ID).orEmpty()
+        )
     }
 
     private data class ConnectionConfig(

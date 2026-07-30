@@ -4,3 +4,4 @@ telethon==1.40.0
 pydantic-settings==2.9.1
 python-dotenv==1.1.0
 structlog==25.3.0
+firebase-admin==7.5.0

@@ -7,4 +7,5 @@ object ServiceActions {
     const val SNOOZE_FIVE_MINUTES = "com.nick.telegramalarm.SNOOZE_FIVE_MINUTES"
     const val SNOOZE_TEN_MINUTES = "com.nick.telegramalarm.SNOOZE_TEN_MINUTES"
     const val TEST_ALARM = "com.nick.telegramalarm.TEST_ALARM"
+    const val PUSH_ALARM = "com.nick.telegramalarm.PUSH_ALARM"
 }

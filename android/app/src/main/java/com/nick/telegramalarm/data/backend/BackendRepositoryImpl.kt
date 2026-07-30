@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -33,7 +34,9 @@ class BackendRepositoryImpl @Inject constructor(
                     reachable = true,
                     websocketClients = websocket?.optInt("clients_count"),
                     telegramConnected = telegram?.optBoolean("connected"),
-                    lastTelegramMessageAt = telegram?.optLong("last_message_at")?.takeIf { it > 0 }
+                    lastTelegramMessageAt = telegram?.optLong("last_message_at")?.takeIf { it > 0 },
+                    pushEnabled = json.optJSONObject("push")?.optBoolean("enabled"),
+                    pushRegisteredDevices = json.optJSONObject("push")?.optInt("registered_devices")
                 )
             }
         }.getOrElse { BackendStatus(reachable = false, error = it.message) }
@@ -100,6 +103,28 @@ class BackendRepositoryImpl @Inject constructor(
         }.getOrElse { GroupsFetchResult(message = "Group load failed: ${it.message ?: it.javaClass.simpleName}") }
     }
 
+    override suspend fun registerPushInstallation(
+        backendUrl: String,
+        authToken: String,
+        installationId: String,
+        previousInstallationId: String?
+    ): BackendActionResult = withContext(Dispatchers.IO) {
+        val url = httpBase(backendUrl) + "/push/register?token=${authToken.urlEncode()}"
+        val body = JSONObject()
+            .put("installation_id", installationId)
+            .put("previous_installation_id", previousInstallationId)
+            .toString()
+            .toRequestBody(JSON_MEDIA_TYPE)
+        runCatching {
+            okHttpClient.newCall(Request.Builder().url(url).post(body).build()).execute().use {
+                if (it.isSuccessful) BackendActionResult(true, "Push token registered")
+                else BackendActionResult(false, "Push registration failed: HTTP ${it.code}")
+            }
+        }.getOrElse {
+            BackendActionResult(false, "Push registration failed: ${it.message ?: it.javaClass.simpleName}")
+        }
+    }
+
     private fun httpBase(backendUrl: String): String {
         val trimmed = backendUrl.trim().removeSuffix("/ws")
         return trimmed
@@ -110,4 +135,8 @@ class BackendRepositoryImpl @Inject constructor(
     }
 
     private fun String.urlEncode(): String = URLEncoder.encode(this, StandardCharsets.UTF_8.name())
+
+    companion object {
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+    }
 }
