@@ -21,9 +21,30 @@ data class AppSettings(
     val alarmDurationSeconds: Int = 0,
     val volumeRampEnabled: Boolean = false,
     val allowedSenderIds: String = "",
-    val blockedSenderIds: String = "",
-    val blockedChatIds: String = "",
+    val blockedChats: List<BlockedChat> = emptyList(),
     val pushInstallationId: String = "",
     val pushRegistered: Boolean = false,
     val pushRegistrationMessage: String = "Firebase is not configured"
+)
+
+enum class ChatType {
+    PERSON,
+    GROUP,
+    BOT,
+    UNKNOWN;
+
+    companion object {
+        fun fromReason(reason: String, hasChatTitle: Boolean = false): ChatType = when {
+            reason == "private_bot" -> BOT
+            reason.startsWith("group_") || hasChatTitle -> GROUP
+            reason == "private_user" -> PERSON
+            else -> UNKNOWN
+        }
+    }
+}
+
+data class BlockedChat(
+    val chatId: String,
+    val title: String,
+    val type: ChatType
 )

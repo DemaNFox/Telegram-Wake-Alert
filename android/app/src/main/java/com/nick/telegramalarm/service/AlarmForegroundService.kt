@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import com.nick.telegramalarm.data.model.AlarmEvent
 import com.nick.telegramalarm.data.model.AppSettings
 import com.nick.telegramalarm.data.model.ConnectionStatus
+import com.nick.telegramalarm.data.model.ChatType
 import com.nick.telegramalarm.data.history.AlarmHistoryRepository
 import com.nick.telegramalarm.data.settings.SettingsRepository
 import com.nick.telegramalarm.domain.AlarmController
@@ -186,8 +187,6 @@ class AlarmForegroundService : Service() {
 
     private fun isSenderAllowed(event: AlarmEvent, settings: AppSettings): Boolean {
         val senderId = event.senderId.trim()
-        val blocked = parseSenderIds(settings.blockedSenderIds)
-        if (senderId in blocked) return false
         val allowed = parseSenderIds(settings.allowedSenderIds)
         return allowed.isEmpty() || senderId in allowed
     }
@@ -221,8 +220,14 @@ class AlarmForegroundService : Service() {
         return false
     }
 
-    private fun isChatBlocked(event: AlarmEvent, settings: AppSettings): Boolean =
-        event.chatId.trim() in parseSenderIds(settings.blockedChatIds)
+    private fun isChatBlocked(event: AlarmEvent, settings: AppSettings): Boolean {
+        val chatId = event.chatId.trim()
+        val senderId = event.senderId.trim()
+        return settings.blockedChats.any { blocked ->
+            blocked.chatId == chatId ||
+                (blocked.type == ChatType.PERSON || blocked.type == ChatType.BOT) && blocked.chatId == senderId
+        }
+    }
 
     private fun isEventSourceEnabled(event: AlarmEvent, settings: AppSettings): Boolean =
         if (isSelectedGroupEvent(event, settings)) {

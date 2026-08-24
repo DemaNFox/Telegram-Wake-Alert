@@ -22,6 +22,7 @@ class RecentPerson:
     name: str
     username: str | None
     last_message_at: int | None
+    is_bot: bool
 
     def to_payload(self) -> dict[str, object]:
         return asdict(self)
@@ -244,6 +245,7 @@ class TelegramListenerService:
             name=name,
             username=sender.username,
             last_message_at=last_message_at,
+            is_bot=bool(sender.bot),
         )
 
     def _remember_group(self, chat_id: str, title: str, last_message_at: int | None) -> None:

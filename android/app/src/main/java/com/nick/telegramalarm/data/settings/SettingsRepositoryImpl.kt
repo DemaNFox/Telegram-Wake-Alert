@@ -10,6 +10,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.nick.telegramalarm.data.model.AppSettings
+import com.nick.telegramalarm.data.model.BlockedChat
+import com.nick.telegramalarm.data.model.ChatType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -44,6 +46,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val allowedSenderIds = stringPreferencesKey("allowed_sender_ids")
         val blockedSenderIds = stringPreferencesKey("blocked_sender_ids")
         val blockedChatIds = stringPreferencesKey("blocked_chat_ids")
+        val blockedChats = stringPreferencesKey("blocked_chats_v2")
         val pushInstallationId = stringPreferencesKey("push_installation_id")
         val pushRegistered = booleanPreferencesKey("push_registered")
         val pushRegistrationMessage = stringPreferencesKey("push_registration_message")
@@ -84,8 +87,11 @@ class SettingsRepositoryImpl @Inject constructor(
             alarmDurationSeconds = prefs[Keys.alarmDurationSeconds] ?: 0,
             volumeRampEnabled = prefs[Keys.volumeRampEnabled] ?: false,
             allowedSenderIds = prefs[Keys.allowedSenderIds] ?: "",
-            blockedSenderIds = prefs[Keys.blockedSenderIds] ?: "",
-            blockedChatIds = prefs[Keys.blockedChatIds] ?: "",
+            blockedChats = decodeBlockedChats(
+                raw = prefs[Keys.blockedChats].orEmpty(),
+                legacyChatIds = prefs[Keys.blockedChatIds].orEmpty(),
+                legacySenderIds = prefs[Keys.blockedSenderIds].orEmpty()
+            ),
             pushInstallationId = prefs[Keys.pushInstallationId] ?: "",
             pushRegistered = prefs[Keys.pushRegistered] ?: false,
             pushRegistrationMessage = prefs[Keys.pushRegistrationMessage] ?: "Firebase is not configured"
@@ -115,8 +121,31 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateAlarmDurationSeconds(value: Int) = update(Keys.alarmDurationSeconds, value.coerceIn(0, 3600))
     override suspend fun updateVolumeRampEnabled(enabled: Boolean) = update(Keys.volumeRampEnabled, enabled)
     override suspend fun updateAllowedSenderIds(value: String) = update(Keys.allowedSenderIds, normalizeSenderIds(value))
-    override suspend fun updateBlockedSenderIds(value: String) = update(Keys.blockedSenderIds, normalizeSenderIds(value))
-    override suspend fun updateBlockedChatIds(value: String) = update(Keys.blockedChatIds, normalizeSenderIds(value))
+    override suspend fun blockChat(chat: BlockedChat) {
+        val normalizedId = chat.chatId.trim()
+        if (normalizedId.isBlank()) return
+        context.dataStore.edit { prefs ->
+            val chats = currentBlockedChats(prefs).associateBy { it.chatId }.toMutableMap()
+            chats[normalizedId] = chat.copy(
+                chatId = normalizedId,
+                title = chat.title.trim().ifBlank { normalizedId }
+            )
+            prefs[Keys.blockedChats] = encodeBlockedChats(chats.values)
+            prefs.remove(Keys.blockedChatIds)
+            prefs.remove(Keys.blockedSenderIds)
+        }
+    }
+
+    override suspend fun unblockChat(chatId: String) {
+        val normalizedId = chatId.trim()
+        if (normalizedId.isBlank()) return
+        context.dataStore.edit { prefs ->
+            val chats = currentBlockedChats(prefs).filterNot { it.chatId == normalizedId }
+            prefs[Keys.blockedChats] = encodeBlockedChats(chats)
+            prefs.remove(Keys.blockedChatIds)
+            prefs.remove(Keys.blockedSenderIds)
+        }
+    }
     override suspend fun updatePushRegistration(
         installationId: String,
         registered: Boolean,
@@ -138,6 +167,63 @@ class SettingsRepositoryImpl @Inject constructor(
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .joinToString(",")
+
+    private fun currentBlockedChats(prefs: androidx.datastore.preferences.core.Preferences): List<BlockedChat> =
+        decodeBlockedChats(
+            raw = prefs[Keys.blockedChats].orEmpty(),
+            legacyChatIds = prefs[Keys.blockedChatIds].orEmpty(),
+            legacySenderIds = prefs[Keys.blockedSenderIds].orEmpty()
+        )
+
+    private fun encodeBlockedChats(chats: Collection<BlockedChat>): String =
+        org.json.JSONArray(
+            chats.sortedBy { it.chatId }.map { chat ->
+                org.json.JSONObject()
+                    .put("chatId", chat.chatId)
+                    .put("title", chat.title)
+                    .put("type", chat.type.name)
+            }
+        ).toString()
+
+    private fun decodeBlockedChats(
+        raw: String,
+        legacyChatIds: String,
+        legacySenderIds: String
+    ): List<BlockedChat> {
+        val chats = linkedMapOf<String, BlockedChat>()
+        val array = runCatching { org.json.JSONArray(raw.ifBlank { "[]" }) }
+            .getOrDefault(org.json.JSONArray())
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val chatId = item.optString("chatId").trim()
+            if (chatId.isBlank()) continue
+            val type = runCatching { ChatType.valueOf(item.optString("type")) }
+                .getOrDefault(ChatType.UNKNOWN)
+            chats[chatId] = BlockedChat(
+                chatId = chatId,
+                title = item.optString("title").ifBlank { chatId },
+                type = type
+            )
+        }
+        parseIds(legacyChatIds).forEach { chatId ->
+            chats.putIfAbsent(chatId, BlockedChat(chatId, chatId, ChatType.UNKNOWN))
+        }
+        parseIds(legacySenderIds).forEach { senderId ->
+            val existing = chats[senderId]
+            chats[senderId] = BlockedChat(
+                chatId = senderId,
+                title = existing?.title ?: senderId,
+                type = if (existing?.type == ChatType.UNKNOWN || existing == null) ChatType.PERSON else existing.type
+            )
+        }
+        return chats.values.toList()
+    }
+
+    private fun parseIds(value: String): Set<String> =
+        value.split(",", "\n", " ")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
 
     private fun sanitizeBackendUrl(value: String?): String {
         val trimmed = value?.trim().orEmpty()

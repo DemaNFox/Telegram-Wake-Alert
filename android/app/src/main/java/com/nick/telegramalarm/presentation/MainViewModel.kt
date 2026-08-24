@@ -8,6 +8,8 @@ import com.nick.telegramalarm.data.groups.GroupsCacheRepository
 import com.nick.telegramalarm.data.model.AlarmHistoryItem
 import com.nick.telegramalarm.data.model.AppSettings
 import com.nick.telegramalarm.data.model.BackendStatus
+import com.nick.telegramalarm.data.model.BlockedChat
+import com.nick.telegramalarm.data.model.ChatType
 import com.nick.telegramalarm.data.model.ConnectionDiagnostics
 import com.nick.telegramalarm.data.model.ConnectionStatus
 import com.nick.telegramalarm.data.model.TelegramPerson
@@ -146,7 +148,6 @@ class MainViewModel @Inject constructor(
     fun setQuietHoursEnd(value: String) = update { settingsRepository.updateQuietHoursEnd(value) }
     fun setCustomAlarmSoundUri(value: String) = update { settingsRepository.updateCustomAlarmSoundUri(value) }
     fun setAllowedSenderIds(value: String) = update { settingsRepository.updateAllowedSenderIds(value) }
-    fun setBlockedSenderIds(value: String) = update { settingsRepository.updateBlockedSenderIds(value) }
     fun refreshPushRegistration() = pushRegistrationManager.refresh()
 
     fun refreshBackendStatus() = viewModelScope.launch {
@@ -195,12 +196,43 @@ class MainViewModel @Inject constructor(
     fun selectGroup(chatId: String) = updateGroupSelection(chatId, selected = true)
     fun removeGroup(chatId: String) = updateGroupSelection(chatId, selected = false)
 
-    fun allowPerson(senderId: String) = updatePeopleList(senderId, addToAllowed = true)
-    fun blockPerson(senderId: String) = updatePeopleList(senderId, addToBlocked = true)
+    fun allowPerson(senderId: String) {
+        updatePeopleList(senderId, addToAllowed = true)
+        unblockChat(senderId)
+    }
+    fun blockPerson(senderId: String) {
+        val person = uiState.value.recentPeople.firstOrNull { it.senderId == senderId }
+        blockChat(
+            BlockedChat(
+                chatId = senderId,
+                title = person?.name ?: senderId,
+                type = ChatType.PERSON
+            )
+        )
+        updatePeopleList(senderId, removeFromAllowed = true)
+    }
     fun removeAllowedPerson(senderId: String) = updatePeopleList(senderId, removeFromAllowed = true)
-    fun removeBlockedPerson(senderId: String) = updatePeopleList(senderId, removeFromBlocked = true)
-    fun blockChat(chatId: String) = updateBlockedChats(chatId, blocked = true)
-    fun unblockChat(chatId: String) = updateBlockedChats(chatId, blocked = false)
+    fun removeBlockedPerson(senderId: String) = unblockChat(senderId)
+    fun blockGroup(chatId: String) {
+        val group = uiState.value.recentGroups.firstOrNull { it.chatId == chatId }
+        blockChat(BlockedChat(chatId, group?.title ?: chatId, ChatType.GROUP))
+    }
+    fun blockBot(chatId: String) {
+        val bot = uiState.value.recentPeople.firstOrNull { it.senderId == chatId }
+        blockChat(BlockedChat(chatId, bot?.name ?: chatId, ChatType.BOT))
+    }
+    fun blockChat(item: AlarmHistoryItem) {
+        val type = ChatType.fromReason(item.reason, item.chatTitle != null)
+        val title = when (type) {
+            ChatType.GROUP -> item.chatTitle
+            ChatType.PERSON, ChatType.BOT -> item.senderName
+            ChatType.UNKNOWN -> item.chatTitle ?: item.senderName
+        }.orEmpty().ifBlank { item.chatId }
+        blockChat(BlockedChat(item.chatId, title, type))
+    }
+    fun unblockChat(chatId: String) = update { settingsRepository.unblockChat(chatId) }
+
+    private fun blockChat(chat: BlockedChat) = update { settingsRepository.blockChat(chat) }
 
     private fun update(block: suspend () -> Unit) {
         viewModelScope.launch { block() }
@@ -227,26 +259,16 @@ class MainViewModel @Inject constructor(
     private fun updatePeopleList(
         senderId: String,
         addToAllowed: Boolean = false,
-        addToBlocked: Boolean = false,
-        removeFromAllowed: Boolean = false,
-        removeFromBlocked: Boolean = false
+        removeFromAllowed: Boolean = false
     ) {
         viewModelScope.launch {
             val settings = uiState.value.settings
             val allowed = parseSenderIds(settings.allowedSenderIds).toMutableSet()
-            val blocked = parseSenderIds(settings.blockedSenderIds).toMutableSet()
             if (addToAllowed) {
                 allowed.add(senderId)
-                blocked.remove(senderId)
-            }
-            if (addToBlocked) {
-                blocked.add(senderId)
-                allowed.remove(senderId)
             }
             if (removeFromAllowed) allowed.remove(senderId)
-            if (removeFromBlocked) blocked.remove(senderId)
             settingsRepository.updateAllowedSenderIds(allowed.joinToString(","))
-            settingsRepository.updateBlockedSenderIds(blocked.joinToString(","))
         }
     }
 
@@ -261,15 +283,6 @@ class MainViewModel @Inject constructor(
             val ids = parseSenderIds(uiState.value.settings.selectedGroupIds).toMutableSet()
             if (selected) ids.add(chatId) else ids.remove(chatId)
             settingsRepository.updateSelectedGroupIds(ids.joinToString(","))
-        }
-    }
-
-    private fun updateBlockedChats(chatId: String, blocked: Boolean) {
-        if (chatId.isBlank()) return
-        viewModelScope.launch {
-            val ids = parseSenderIds(uiState.value.settings.blockedChatIds).toMutableSet()
-            if (blocked) ids.add(chatId) else ids.remove(chatId)
-            settingsRepository.updateBlockedChatIds(ids.joinToString(","))
         }
     }
 

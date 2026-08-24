@@ -16,6 +16,8 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,9 +62,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,8 +75,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.nick.telegramalarm.service.AlarmForegroundService
 import com.nick.telegramalarm.service.ServiceActions
+import com.nick.telegramalarm.data.model.BlockedChat
+import com.nick.telegramalarm.data.model.ChatType
 import com.nick.telegramalarm.ui.theme.TelegramAlarmTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -180,7 +186,19 @@ private fun MainApp(
     onOverlay: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var tab by remember { mutableIntStateOf(0) }
+    val tabs = remember {
+        listOf(
+            AppTab("Main", Icons.Default.NotificationsActive),
+            AppTab("Diag", Icons.Default.CloudSync),
+            AppTab("People", Icons.Default.People),
+            AppTab("Groups", Icons.Default.People),
+            AppTab("Bots", Icons.Default.SmartToy),
+            AppTab("History", Icons.Default.History),
+            AppTab("Settings", Icons.Default.Settings)
+        )
+    }
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val coroutineScope = rememberCoroutineScope()
     Scaffold(
         topBar = {
             TopAppBar(title = { Text("Telegram Alarm") })
@@ -192,36 +210,51 @@ private fun MainApp(
                 .background(Color(0xFF0F172A))
                 .padding(padding)
         ) {
-            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Main") }, icon = { Icon(Icons.Default.NotificationsActive, null) })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Diag") }, icon = { Icon(Icons.Default.CloudSync, null) })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("People") }, icon = { Icon(Icons.Default.People, null) })
-                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Groups") }, icon = { Icon(Icons.Default.People, null) })
-                Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("History") }, icon = { Icon(Icons.Default.History, null) })
-                Tab(selected = tab == 5, onClick = { tab = 5 }, text = { Text("Settings") }, icon = { Icon(Icons.Default.Settings, null) })
+            ScrollableTabRow(selectedTabIndex = pagerState.currentPage, edgePadding = 0.dp) {
+                tabs.forEachIndexed { index, appTab ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+                        text = { Text(appTab.title) },
+                        icon = { Icon(appTab.icon, null) }
+                    )
+                }
             }
-            when (tab) {
-                0 -> MainScreen(
-                    uiState,
-                    viewModel,
-                    notificationsEnabled,
-                    batteryUnrestricted,
-                    fullScreenAlertsAllowed,
-                    overlayAllowed,
-                    onTestAlarm,
-                    onBatteryOptimization,
-                    onFullScreenAlerts,
-                    onOverlay
-                )
-                1 -> DiagnosticsScreen(uiState, viewModel)
-                2 -> PeopleLazyScreen(uiState, viewModel)
-                3 -> GroupsLazyScreen(uiState, viewModel)
-                4 -> HistoryLazyScreen(uiState, viewModel)
-                else -> SettingsScreen(uiState, viewModel)
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) { page ->
+                when (page) {
+                    0 -> MainScreen(
+                        uiState,
+                        viewModel,
+                        notificationsEnabled,
+                        batteryUnrestricted,
+                        fullScreenAlertsAllowed,
+                        overlayAllowed,
+                        onTestAlarm,
+                        onBatteryOptimization,
+                        onFullScreenAlerts,
+                        onOverlay
+                    )
+                    1 -> DiagnosticsScreen(uiState, viewModel)
+                    2 -> PeopleLazyScreen(uiState, viewModel)
+                    3 -> GroupsLazyScreen(uiState, viewModel)
+                    4 -> BotsLazyScreen(uiState, viewModel)
+                    5 -> HistoryLazyScreen(uiState, viewModel)
+                    else -> SettingsScreen(uiState, viewModel)
+                }
             }
         }
     }
 }
+
+private data class AppTab(
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
 
 @Composable
 private fun MainScreen(
@@ -361,7 +394,9 @@ private fun DiagnosticsScreen(uiState: MainUiState, viewModel: MainViewModel) {
 @Composable
 private fun PeopleScreen(uiState: MainUiState, viewModel: MainViewModel) {
     val allowed = remember(uiState.settings.allowedSenderIds) { parseSenderIds(uiState.settings.allowedSenderIds) }
-    val blocked = remember(uiState.settings.blockedSenderIds) { parseSenderIds(uiState.settings.blockedSenderIds) }
+    val blocked = remember(uiState.settings.blockedChats) {
+        uiState.settings.blockedChats.filter { it.type == ChatType.PERSON }.map { it.chatId }.toSet()
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -531,20 +566,23 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
     val allowed = remember(uiState.settings.allowedSenderIds) {
         parseSenderIds(uiState.settings.allowedSenderIds)
     }
-    val blocked = remember(uiState.settings.blockedSenderIds) {
-        parseSenderIds(uiState.settings.blockedSenderIds)
+    val resolvedBlocked = remember(
+        uiState.settings.blockedChats,
+        uiState.history,
+        uiState.recentPeople,
+        uiState.recentGroups
+    ) {
+        uiState.resolvedBlockedChats()
     }
+    val blockedPeople = remember(resolvedBlocked) {
+        resolvedBlocked.filter { it.type == ChatType.PERSON }.sortedBy { it.title.lowercase() }
+    }
+    val blocked = remember(blockedPeople) { blockedPeople.map { it.chatId }.toSet() }
     val allowedPeople = remember(uiState.recentPeople, allowed) {
         allowed.map { senderId ->
             uiState.recentPeople.firstOrNull { it.senderId == senderId }
                 ?: com.nick.telegramalarm.data.model.TelegramPerson(senderId, senderId, null, null)
-        }.sortedBy { it.name.lowercase() }
-    }
-    val blockedPeople = remember(uiState.recentPeople, blocked) {
-        blocked.map { senderId ->
-            uiState.recentPeople.firstOrNull { it.senderId == senderId }
-                ?: com.nick.telegramalarm.data.model.TelegramPerson(senderId, senderId, null, null)
-        }.sortedBy { it.name.lowercase() }
+        }.filterNot { it.isBot }.sortedBy { it.name.lowercase() }
     }
 
     LazyColumn(
@@ -571,9 +609,9 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
         if (blockedPeople.isEmpty()) {
             item { Text("No blocked people", color = Color(0xFF94A3B8)) }
         } else {
-            items(blockedPeople, key = { "blocked-${it.senderId}" }) { person ->
-                PersonSelectionRow(person.name, person.senderId, "Unblock") {
-                    viewModel.removeBlockedPerson(person.senderId)
+            items(blockedPeople, key = { "blocked-${it.chatId}" }) { chat ->
+                PersonSelectionRow(chat.title, chat.chatId, "Unblock") {
+                    viewModel.removeBlockedPerson(chat.chatId)
                 }
             }
         }
@@ -588,7 +626,7 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
         item {
             Text("Telegram people", color = Color.White, style = MaterialTheme.typography.titleMedium)
         }
-        items(uiState.recentPeople, key = { it.senderId }) { person ->
+        items(uiState.recentPeople.filterNot { it.isBot }, key = { it.senderId }) { person ->
             val state = when (person.senderId) {
                 in blocked -> "blocked"
                 in allowed -> "allowed"
@@ -650,6 +688,17 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                 ?: com.nick.telegramalarm.data.model.TelegramGroup(chatId, chatId, null)
         }.sortedBy { it.title.lowercase() }
     }
+    val blockedGroups = remember(
+        uiState.settings.blockedChats,
+        uiState.history,
+        uiState.recentPeople,
+        uiState.recentGroups
+    ) {
+        uiState.resolvedBlockedChats()
+            .filter { it.type == ChatType.GROUP }
+            .sortedBy { it.title.lowercase() }
+    }
+    val blockedIds = remember(blockedGroups) { blockedGroups.map { it.chatId }.toSet() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -660,6 +709,18 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
         item {
             SwitchRow("Notify for selected groups", uiState.settings.selectedGroupsEnabled) {
                 viewModel.setSelectedGroupsEnabled(it)
+            }
+        }
+        item {
+            Text("Blocked groups (${blockedGroups.size})", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        if (blockedGroups.isEmpty()) {
+            item { Text("No blocked groups", color = Color(0xFF94A3B8)) }
+        } else {
+            items(blockedGroups, key = { "blocked-${it.chatId}" }) { chat ->
+                PersonSelectionRow(chat.title, chat.chatId, "Unblock") {
+                    viewModel.unblockChat(chat.chatId)
+                }
             }
         }
         item {
@@ -702,6 +763,7 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
         }
         items(visibleGroups, key = { it.chatId }) { group ->
             val isSelected = group.chatId in selected
+            val isBlocked = group.chatId in blockedIds
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -715,13 +777,102 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     Text(group.chatId, color = Color(0xFF94A3B8))
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        if (isSelected) viewModel.removeGroup(group.chatId)
-                        else viewModel.selectGroup(group.chatId)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            if (isSelected) viewModel.removeGroup(group.chatId)
+                            else viewModel.selectGroup(group.chatId)
+                        }
+                    ) {
+                        Text(if (isSelected) "Remove" else "Select")
                     }
+                    Button(
+                        onClick = {
+                            if (isBlocked) viewModel.unblockChat(group.chatId)
+                            else viewModel.blockGroup(group.chatId)
+                        }
+                    ) {
+                        Text(if (isBlocked) "Unblock" else "Block")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BotsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
+    val blockedBots = remember(
+        uiState.settings.blockedChats,
+        uiState.history,
+        uiState.recentPeople,
+        uiState.recentGroups
+    ) {
+        uiState.resolvedBlockedChats()
+            .filter { it.type == ChatType.BOT }
+            .sortedBy { it.title.lowercase() }
+    }
+    val blockedIds = remember(blockedBots) { blockedBots.map { it.chatId }.toSet() }
+    val bots = remember(uiState.recentPeople) { uiState.recentPeople.filter { it.isBot } }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item { Text("Bots", style = MaterialTheme.typography.headlineSmall, color = Color.White) }
+        item {
+            SwitchRow("Private bot alerts", uiState.settings.alertPrivateBots) {
+                viewModel.setAlertPrivateBots(it)
+            }
+        }
+        item {
+            Text("Blocked bots (${blockedBots.size})", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        if (blockedBots.isEmpty()) {
+            item { Text("No blocked bots", color = Color(0xFF94A3B8)) }
+        } else {
+            items(blockedBots, key = { "blocked-bot-${it.chatId}" }) { chat ->
+                PersonSelectionRow(chat.title, chat.chatId, "Unblock") {
+                    viewModel.unblockChat(chat.chatId)
+                }
+            }
+        }
+        item {
+            Button(onClick = { viewModel.refreshRecentPeople() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Load recent Telegram bots")
+            }
+        }
+        uiState.peopleLoadResult?.let { result ->
+            item { Text(result, color = Color(0xFFCBD5E1)) }
+        }
+        item { Text("Telegram bots", color = Color.White, style = MaterialTheme.typography.titleMedium) }
+        if (bots.isEmpty()) {
+            item { Text("No recent bots", color = Color(0xFF94A3B8)) }
+        } else {
+            items(bots, key = { "bot-${it.senderId}" }) { bot ->
+                val isBlocked = bot.senderId in blockedIds
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF111827))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(if (isSelected) "Remove" else "Select")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(bot.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        Text("@${bot.username ?: "-"} · ${bot.senderId}", color = Color(0xFF94A3B8))
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (isBlocked) viewModel.unblockChat(bot.senderId)
+                            else viewModel.blockBot(bot.senderId)
+                        }
+                    ) {
+                        Text(if (isBlocked) "Unblock" else "Block")
+                    }
                 }
             }
         }
@@ -730,8 +881,8 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
 
 @Composable
 private fun HistoryLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
-    val blockedChats = remember(uiState.settings.blockedChatIds) {
-        parseSenderIds(uiState.settings.blockedChatIds)
+    val blockedChats = remember(uiState.settings.blockedChats) {
+        uiState.settings.blockedChats.map { it.chatId }.toSet()
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -759,7 +910,7 @@ private fun HistoryLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
             HistoryItemCard(
                 item = historyItem,
                 isBlocked = historyItem.chatId in blockedChats,
-                onBlockChat = { viewModel.blockChat(historyItem.chatId) },
+                onBlockChat = { viewModel.blockChat(historyItem) },
                 onUnblockChat = { viewModel.unblockChat(historyItem.chatId) }
             )
         }
@@ -865,6 +1016,38 @@ private fun parseSenderIds(value: String): Set<String> =
         .filter { it.isNotBlank() }
         .toSet()
 
+private fun MainUiState.resolvedBlockedChats(): List<BlockedChat> =
+    settings.blockedChats.map { blocked ->
+        if (blocked.type != ChatType.UNKNOWN) return@map blocked
+
+        val group = recentGroups.firstOrNull { it.chatId == blocked.chatId }
+        if (group != null) {
+            return@map blocked.copy(title = group.title, type = ChatType.GROUP)
+        }
+
+        val person = recentPeople.firstOrNull { it.senderId == blocked.chatId }
+        if (person != null) {
+            return@map blocked.copy(
+                title = person.name,
+                type = if (person.isBot) ChatType.BOT else ChatType.PERSON
+            )
+        }
+
+        val historyItem = history.firstOrNull { it.chatId == blocked.chatId }
+        if (historyItem != null) {
+            val type = ChatType.fromReason(historyItem.reason, historyItem.chatTitle != null)
+            return@map blocked.copy(
+                title = when (type) {
+                    ChatType.GROUP -> historyItem.chatTitle
+                    else -> historyItem.senderName
+                }.orEmpty().ifBlank { blocked.title },
+                type = type
+            )
+        }
+
+        blocked.copy(type = if (blocked.chatId.startsWith("-")) ChatType.GROUP else ChatType.PERSON)
+    }
+
 @Composable
 private fun DiagnosticRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -875,9 +1058,6 @@ private fun DiagnosticRow(label: String, value: String) {
 
 @Composable
 private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
-    val blockedChats = remember(uiState.settings.blockedChatIds) {
-        parseSenderIds(uiState.settings.blockedChatIds)
-    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -890,25 +1070,6 @@ private fun SettingsScreen(uiState: MainUiState, viewModel: MainViewModel) {
         SwitchRow("Private bots", uiState.settings.alertPrivateBots) { viewModel.setAlertPrivateBots(it) }
         SwitchRow("Group mentions", uiState.settings.alertGroupMentions) { viewModel.setAlertGroupMentions(it) }
         SwitchRow("Group replies", uiState.settings.alertGroupReplies) { viewModel.setAlertGroupReplies(it) }
-        Text(
-            "Blocked chats (${blockedChats.size})",
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium
-        )
-        if (blockedChats.isEmpty()) {
-            Text("No blocked chats", color = Color(0xFF94A3B8))
-        } else {
-            blockedChats.forEach { chatId ->
-                val chatName = uiState.history
-                    .firstOrNull { it.chatId == chatId }
-                    ?.chatTitle
-                    ?.takeIf { it.isNotBlank() }
-                    ?: chatId
-                PersonSelectionRow(chatName, chatId, "Unblock") {
-                    viewModel.unblockChat(chatId)
-                }
-            }
-        }
         Text("Push delivery", color = Color.White, style = MaterialTheme.typography.titleMedium)
         DiagnosticRow(
             "Registration",

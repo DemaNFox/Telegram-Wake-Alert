@@ -29,7 +29,8 @@ class AlarmHistoryRepositoryImpl @Inject constructor(
                 chatId = event.chatId,
                 chatTitle = event.chatTitle,
                 senderId = event.senderId,
-                eventId = event.eventId
+                eventId = event.eventId,
+                reason = event.reason
             )
         ) + _history.value).take(MAX_ITEMS)
         persist(updated)
@@ -50,6 +51,7 @@ class AlarmHistoryRepositoryImpl @Inject constructor(
                 .put("chatTitle", item.chatTitle)
                 .put("senderId", item.senderId)
                 .put("eventId", item.eventId)
+                .put("reason", item.reason)
         }).toString()).apply()
         _history.value = items
     }
@@ -71,7 +73,10 @@ class AlarmHistoryRepositoryImpl @Inject constructor(
                             it.isNotBlank() && it != "null"
                         },
                         senderId = item.optString("senderId"),
-                        eventId = item.optString("eventId")
+                        eventId = item.optString("eventId"),
+                        reason = item.optString("reason").ifBlank {
+                            if (item.optString("chatTitle").isNotBlank()) "group_message" else "private_user"
+                        }
                     )
                 )
             }

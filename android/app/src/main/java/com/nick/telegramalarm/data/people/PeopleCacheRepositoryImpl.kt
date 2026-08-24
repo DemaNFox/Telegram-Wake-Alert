@@ -41,6 +41,7 @@ class PeopleCacheRepositoryImpl @Inject constructor(
                     .put("name", person.name)
                     .put("username", person.username)
                     .put("lastMessageAt", person.lastMessageAt)
+                    .put("isBot", person.isBot)
             }
         ).toString()
 
@@ -56,7 +57,8 @@ class PeopleCacheRepositoryImpl @Inject constructor(
                         senderId = senderId,
                         name = item.optString("name").ifBlank { senderId },
                         username = item.optString("username").takeIf { it.isNotBlank() && it != "null" },
-                        lastMessageAt = item.optLong("lastMessageAt").takeIf { it > 0 }
+                        lastMessageAt = item.optLong("lastMessageAt").takeIf { it > 0 },
+                        isBot = item.optBoolean("isBot")
                     )
                 )
             }

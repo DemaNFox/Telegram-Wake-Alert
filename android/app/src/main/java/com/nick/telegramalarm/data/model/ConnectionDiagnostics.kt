@@ -24,7 +24,8 @@ data class TelegramPerson(
     val senderId: String,
     val name: String,
     val username: String?,
-    val lastMessageAt: Long?
+    val lastMessageAt: Long?,
+    val isBot: Boolean = false
 )
 
 data class PeopleFetchResult(

@@ -1,6 +1,7 @@
 package com.nick.telegramalarm.data.settings
 
 import com.nick.telegramalarm.data.model.AppSettings
+import com.nick.telegramalarm.data.model.BlockedChat
 import kotlinx.coroutines.flow.Flow
 
 interface SettingsRepository {
@@ -25,7 +26,7 @@ interface SettingsRepository {
     suspend fun updateAlarmDurationSeconds(value: Int)
     suspend fun updateVolumeRampEnabled(enabled: Boolean)
     suspend fun updateAllowedSenderIds(value: String)
-    suspend fun updateBlockedSenderIds(value: String)
-    suspend fun updateBlockedChatIds(value: String)
+    suspend fun blockChat(chat: BlockedChat)
+    suspend fun unblockChat(chatId: String)
     suspend fun updatePushRegistration(installationId: String, registered: Boolean, message: String)
 }

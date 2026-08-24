@@ -69,7 +69,8 @@ class BackendRepositoryImpl @Inject constructor(
                                 senderId = item.optString("sender_id"),
                                 name = item.optString("name"),
                                 username = item.optString("username").takeIf { it.isNotBlank() && it != "null" },
-                                lastMessageAt = item.optLong("last_message_at").takeIf { it > 0 }
+                                lastMessageAt = item.optLong("last_message_at").takeIf { it > 0 },
+                                isBot = item.optBoolean("is_bot")
                             )
                         )
                     }
