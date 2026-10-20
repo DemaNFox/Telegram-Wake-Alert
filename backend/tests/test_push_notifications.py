@@ -15,11 +15,13 @@ class NewMessageEventTests(unittest.TestCase):
             sender_name="Sender",
             message="Important",
             timestamp=123,
+            sender_username="sender_username",
         )
 
         self.assertEqual(event.event_id, event.event_id)
         self.assertEqual(event.event_id, event.to_payload()["event_id"])
         self.assertEqual(32, len(event.event_id))
+        self.assertEqual("sender_username", event.to_payload()["sender_username"])
 
     def test_event_id_changes_with_message(self) -> None:
         first = NewMessageEvent("chat", "sender", "Sender", "One", 123)

@@ -46,5 +46,6 @@ enum class ChatType {
 data class BlockedChat(
     val chatId: String,
     val title: String,
-    val type: ChatType
+    val type: ChatType,
+    val username: String? = null
 )

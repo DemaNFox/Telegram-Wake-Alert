@@ -135,6 +135,7 @@ class FirebasePushService:
             "chat_id": event.chat_id,
             "sender_id": event.sender_id,
             "sender_name": event.sender_name,
+            "sender_username": event.sender_username or "",
             "message": event.message,
             "timestamp": str(event.timestamp),
             "chat_title": event.chat_title or "",

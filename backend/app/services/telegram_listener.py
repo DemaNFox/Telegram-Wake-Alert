@@ -136,6 +136,7 @@ class TelegramListenerService:
             message=text,
             timestamp=int(message.date.timestamp()) if message.date else int(time.time()),
             chat_title=chat_title,
+            sender_username=sender.username if isinstance(sender, User) else None,
             reason=reason,
         )
         self._messages_sent += 1

@@ -308,6 +308,7 @@ class AlarmForegroundService : Service() {
         private const val EXTRA_CHAT_ID = "chat_id"
         private const val EXTRA_SENDER_ID = "sender_id"
         private const val EXTRA_SENDER_NAME = "sender_name"
+        private const val EXTRA_SENDER_USERNAME = "sender_username"
         private const val EXTRA_MESSAGE = "message"
         private const val EXTRA_TIMESTAMP = "timestamp"
         private const val EXTRA_CHAT_TITLE = "chat_title"
@@ -330,6 +331,7 @@ class AlarmForegroundService : Service() {
                 .putExtra(EXTRA_CHAT_ID, event.chatId)
                 .putExtra(EXTRA_SENDER_ID, event.senderId)
                 .putExtra(EXTRA_SENDER_NAME, event.senderName)
+                .putExtra(EXTRA_SENDER_USERNAME, event.senderUsername)
                 .putExtra(EXTRA_MESSAGE, event.message)
                 .putExtra(EXTRA_TIMESTAMP, event.timestamp)
                 .putExtra(EXTRA_CHAT_TITLE, event.chatTitle)
@@ -374,6 +376,7 @@ class AlarmForegroundService : Service() {
             chatId = chatId,
             senderId = senderId,
             senderName = getStringExtra(EXTRA_SENDER_NAME).orEmpty(),
+            senderUsername = getStringExtra(EXTRA_SENDER_USERNAME),
             message = getStringExtra(EXTRA_MESSAGE).orEmpty(),
             timestamp = getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis() / 1_000),
             chatTitle = getStringExtra(EXTRA_CHAT_TITLE)?.takeIf { it.isNotBlank() },

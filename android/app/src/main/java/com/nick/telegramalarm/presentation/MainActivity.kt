@@ -77,6 +77,8 @@ import com.nick.telegramalarm.service.AlarmForegroundService
 import com.nick.telegramalarm.service.ServiceActions
 import com.nick.telegramalarm.data.model.BlockedChat
 import com.nick.telegramalarm.data.model.ChatType
+import com.nick.telegramalarm.data.model.TelegramGroup
+import com.nick.telegramalarm.data.model.TelegramPerson
 import com.nick.telegramalarm.ui.theme.TelegramAlarmTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -423,8 +425,8 @@ private fun PeopleScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(person.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                Text("@${person.username ?: "-"} · ${person.senderId} · $state", color = Color(0xFF94A3B8))
+                Text(person.visibleName(), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text(listOfNotNull(person.username?.let { "@$it" }, state).joinToString(" · "), color = Color(0xFF94A3B8))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = { viewModel.allowPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
                         Text("Allow")
@@ -485,7 +487,7 @@ private fun GroupsScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(group.title, color = Color.White, modifier = Modifier.weight(1f))
+                    Text(group.visibleTitle(), color = Color.White, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = { viewModel.removeGroup(group.chatId) }) {
                         Text("Remove")
@@ -515,8 +517,7 @@ private fun GroupsScreen(uiState: MainUiState, viewModel: MainViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(group.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                    Text(group.chatId, color = Color(0xFF94A3B8))
+                    Text(group.visibleTitle(), color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
@@ -598,7 +599,7 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
             item { Text("No explicitly allowed people", color = Color(0xFF94A3B8)) }
         } else {
             items(allowedPeople, key = { "allowed-${it.senderId}" }) { person ->
-                PersonSelectionRow(person.name, person.senderId, "Remove") {
+                PersonSelectionRow(person.visibleName(), person.username?.let { "@$it" }, "Remove") {
                     viewModel.removeAllowedPerson(person.senderId)
                 }
             }
@@ -610,7 +611,7 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
             item { Text("No blocked people", color = Color(0xFF94A3B8)) }
         } else {
             items(blockedPeople, key = { "blocked-${it.chatId}" }) { chat ->
-                PersonSelectionRow(chat.title, chat.chatId, "Unblock") {
+                PersonSelectionRow(chat.visibleTitle(), chat.username?.let { "@$it" }, "Unblock") {
                     viewModel.removeBlockedPerson(chat.chatId)
                 }
             }
@@ -639,8 +640,8 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(person.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                Text("@${person.username ?: "-"} · ${person.senderId} · $state", color = Color(0xFF94A3B8))
+                Text(person.visibleName(), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text(listOfNotNull(person.username?.let { "@$it" }, state).joinToString(" · "), color = Color(0xFF94A3B8))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = { viewModel.allowPerson(person.senderId) }, modifier = Modifier.weight(1f)) {
                         Text("Allow")
@@ -655,7 +656,7 @@ private fun PeopleLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
 }
 
 @Composable
-private fun PersonSelectionRow(name: String, senderId: String, action: String, onAction: () -> Unit) {
+private fun PersonSelectionRow(name: String, subtitle: String?, action: String, onAction: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -666,7 +667,7 @@ private fun PersonSelectionRow(name: String, senderId: String, action: String, o
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(name, color = Color.White)
-            if (name != senderId) Text(senderId, color = Color(0xFF94A3B8))
+            subtitle?.takeIf { it.isNotBlank() }?.let { Text(it, color = Color(0xFF94A3B8)) }
         }
         Spacer(Modifier.width(8.dp))
         Button(onClick = onAction) { Text(action) }
@@ -718,7 +719,7 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
             item { Text("No blocked groups", color = Color(0xFF94A3B8)) }
         } else {
             items(blockedGroups, key = { "blocked-${it.chatId}" }) { chat ->
-                PersonSelectionRow(chat.title, chat.chatId, "Unblock") {
+                PersonSelectionRow(chat.visibleTitle(), null, "Unblock") {
                     viewModel.unblockChat(chat.chatId)
                 }
             }
@@ -738,7 +739,7 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(group.title, color = Color.White, modifier = Modifier.weight(1f))
+                    Text(group.visibleTitle(), color = Color.White, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = { viewModel.removeGroup(group.chatId) }) { Text("Remove") }
                 }
@@ -773,8 +774,7 @@ private fun GroupsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(group.title, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                    Text(group.chatId, color = Color(0xFF94A3B8))
+                    Text(group.visibleTitle(), color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.width(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -833,7 +833,7 @@ private fun BotsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
             item { Text("No blocked bots", color = Color(0xFF94A3B8)) }
         } else {
             items(blockedBots, key = { "blocked-bot-${it.chatId}" }) { chat ->
-                PersonSelectionRow(chat.title, chat.chatId, "Unblock") {
+                PersonSelectionRow(chat.visibleTitle(), chat.username?.let { "@$it" }, "Unblock") {
                     viewModel.unblockChat(chat.chatId)
                 }
             }
@@ -861,8 +861,10 @@ private fun BotsLazyScreen(uiState: MainUiState, viewModel: MainViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(bot.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Text("@${bot.username ?: "-"} · ${bot.senderId}", color = Color(0xFF94A3B8))
+                        Text(bot.visibleName(), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        bot.username?.let { username ->
+                            Text("@$username", color = Color(0xFF94A3B8))
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -1016,36 +1018,42 @@ private fun parseSenderIds(value: String): Set<String> =
         .filter { it.isNotBlank() }
         .toSet()
 
+private fun TelegramPerson.visibleName(): String =
+    name.takeIf { it.isNotBlank() && it != senderId }
+        ?: if (isBot) "Unknown bot" else "Unknown person"
+
+private fun TelegramGroup.visibleTitle(): String =
+    title.takeIf { it.isNotBlank() && it != chatId } ?: "Unknown group"
+
+private fun BlockedChat.visibleTitle(): String =
+    title.takeIf { it.isNotBlank() && it != chatId } ?: when (type) {
+        ChatType.GROUP -> "Unknown group"
+        ChatType.BOT -> "Unknown bot"
+        ChatType.PERSON, ChatType.UNKNOWN -> "Unknown person"
+    }
+
 private fun MainUiState.resolvedBlockedChats(): List<BlockedChat> =
     settings.blockedChats.map { blocked ->
-        if (blocked.type != ChatType.UNKNOWN) return@map blocked
-
         val group = recentGroups.firstOrNull { it.chatId == blocked.chatId }
-        if (group != null) {
-            return@map blocked.copy(title = group.title, type = ChatType.GROUP)
-        }
-
         val person = recentPeople.firstOrNull { it.senderId == blocked.chatId }
-        if (person != null) {
-            return@map blocked.copy(
-                title = person.name,
-                type = if (person.isBot) ChatType.BOT else ChatType.PERSON
-            )
-        }
-
         val historyItem = history.firstOrNull { it.chatId == blocked.chatId }
-        if (historyItem != null) {
-            val type = ChatType.fromReason(historyItem.reason, historyItem.chatTitle != null)
-            return@map blocked.copy(
-                title = when (type) {
-                    ChatType.GROUP -> historyItem.chatTitle
-                    else -> historyItem.senderName
-                }.orEmpty().ifBlank { blocked.title },
-                type = type
-            )
+        val resolvedType = when {
+            blocked.type != ChatType.UNKNOWN -> blocked.type
+            group != null -> ChatType.GROUP
+            person != null -> if (person.isBot) ChatType.BOT else ChatType.PERSON
+            historyItem != null -> ChatType.fromReason(historyItem.reason, historyItem.chatTitle != null)
+            blocked.chatId.startsWith("-") -> ChatType.GROUP
+            else -> ChatType.PERSON
         }
-
-        blocked.copy(type = if (blocked.chatId.startsWith("-")) ChatType.GROUP else ChatType.PERSON)
+        blocked.copy(
+            title = when (resolvedType) {
+                ChatType.GROUP -> group?.title ?: historyItem?.chatTitle
+                ChatType.PERSON, ChatType.BOT -> person?.name ?: historyItem?.senderName
+                ChatType.UNKNOWN -> null
+            }.orEmpty().ifBlank { blocked.title },
+            type = resolvedType,
+            username = person?.username ?: historyItem?.senderUsername ?: blocked.username
+        )
     }
 
 @Composable

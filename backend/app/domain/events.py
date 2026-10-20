@@ -10,6 +10,7 @@ class NewMessageEvent:
     message: str
     timestamp: int
     chat_title: str | None = None
+    sender_username: str | None = None
     reason: str = "private_user"
 
     @property

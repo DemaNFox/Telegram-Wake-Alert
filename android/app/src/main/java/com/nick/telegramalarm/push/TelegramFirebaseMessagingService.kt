@@ -25,6 +25,7 @@ class TelegramFirebaseMessagingService : FirebaseMessagingService() {
             message = data["message"].orEmpty(),
             timestamp = data["timestamp"]?.toLongOrNull() ?: System.currentTimeMillis() / 1_000,
             chatTitle = data["chat_title"]?.takeIf { it.isNotBlank() },
+            senderUsername = data["sender_username"]?.takeIf { it.isNotBlank() },
             reason = data["reason"].orEmpty().ifBlank { "private_user" },
             eventId = data["event_id"].orEmpty()
         )

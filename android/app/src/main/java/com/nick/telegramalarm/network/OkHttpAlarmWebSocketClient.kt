@@ -77,6 +77,7 @@ class OkHttpAlarmWebSocketClient @Inject constructor(
                         message = json.optString("message"),
                         timestamp = json.optLong("timestamp"),
                         chatTitle = json.optNullableString("chat_title"),
+                        senderUsername = json.optNullableString("sender_username"),
                         reason = json.optString("reason", "private_user"),
                         eventId = json.optString("event_id")
                     )

@@ -126,9 +126,15 @@ class SettingsRepositoryImpl @Inject constructor(
         if (normalizedId.isBlank()) return
         context.dataStore.edit { prefs ->
             val chats = currentBlockedChats(prefs).associateBy { it.chatId }.toMutableMap()
+            val existing = chats[normalizedId]
             chats[normalizedId] = chat.copy(
                 chatId = normalizedId,
-                title = chat.title.trim().ifBlank { normalizedId }
+                title = chat.title.trim()
+                    .takeIf { it.isNotBlank() && it != normalizedId }
+                    ?: existing?.title
+                    ?: normalizedId,
+                username = chat.username?.trim()?.takeIf { it.isNotBlank() }
+                    ?: existing?.username
             )
             prefs[Keys.blockedChats] = encodeBlockedChats(chats.values)
             prefs.remove(Keys.blockedChatIds)
@@ -182,6 +188,7 @@ class SettingsRepositoryImpl @Inject constructor(
                     .put("chatId", chat.chatId)
                     .put("title", chat.title)
                     .put("type", chat.type.name)
+                    .put("username", chat.username)
             }
         ).toString()
 
@@ -202,7 +209,8 @@ class SettingsRepositoryImpl @Inject constructor(
             chats[chatId] = BlockedChat(
                 chatId = chatId,
                 title = item.optString("title").ifBlank { chatId },
-                type = type
+                type = type,
+                username = item.optString("username").takeIf { it.isNotBlank() && it != "null" }
             )
         }
         parseIds(legacyChatIds).forEach { chatId ->

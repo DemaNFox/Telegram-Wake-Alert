@@ -7,6 +7,7 @@ data class AlarmEvent(
     val message: String,
     val timestamp: Long,
     val chatTitle: String? = null,
+    val senderUsername: String? = null,
     val reason: String = "private_user",
     val eventId: String = ""
 )
@@ -20,5 +21,6 @@ data class AlarmHistoryItem(
     val chatTitle: String? = null,
     val senderId: String = "",
     val eventId: String = "",
+    val senderUsername: String? = null,
     val reason: String = "private_user"
 )

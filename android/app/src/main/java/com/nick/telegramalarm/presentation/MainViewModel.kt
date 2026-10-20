@@ -206,7 +206,8 @@ class MainViewModel @Inject constructor(
             BlockedChat(
                 chatId = senderId,
                 title = person?.name ?: senderId,
-                type = ChatType.PERSON
+                type = ChatType.PERSON,
+                username = person?.username
             )
         )
         updatePeopleList(senderId, removeFromAllowed = true)
@@ -219,7 +220,7 @@ class MainViewModel @Inject constructor(
     }
     fun blockBot(chatId: String) {
         val bot = uiState.value.recentPeople.firstOrNull { it.senderId == chatId }
-        blockChat(BlockedChat(chatId, bot?.name ?: chatId, ChatType.BOT))
+        blockChat(BlockedChat(chatId, bot?.name ?: chatId, ChatType.BOT, bot?.username))
     }
     fun blockChat(item: AlarmHistoryItem) {
         val type = ChatType.fromReason(item.reason, item.chatTitle != null)
@@ -228,7 +229,9 @@ class MainViewModel @Inject constructor(
             ChatType.PERSON, ChatType.BOT -> item.senderName
             ChatType.UNKNOWN -> item.chatTitle ?: item.senderName
         }.orEmpty().ifBlank { item.chatId }
-        blockChat(BlockedChat(item.chatId, title, type))
+        val username = item.senderUsername
+            ?: uiState.value.recentPeople.firstOrNull { it.senderId == item.senderId }?.username
+        blockChat(BlockedChat(item.chatId, title, type, username))
     }
     fun unblockChat(chatId: String) = update { settingsRepository.unblockChat(chatId) }
 
